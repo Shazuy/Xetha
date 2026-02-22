@@ -13,7 +13,7 @@ intents.members = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# 🔧 CAMBIA ESTOS IDs
+# 🔧 CAMBIA ESTOS IDs POR LOS DE TU SERVIDOR FINAL
 CANAL_SHIPS = 1474938439551025332
 CANAL_REGISTRO = 1474938511890059275
 
@@ -33,7 +33,7 @@ async def on_message(message):
     if message.channel.id == CANAL_SHIPS:
 
         if len(message.mentions) != 2:
-            await message.channel.send("❌ Usa el formato: @usuario + @usuario")
+            await message.channel.send("❌ Usa el formato: @usuario @usuario")
             return
 
         user1 = message.mentions[0]
@@ -85,6 +85,8 @@ async def on_message(message):
 
     await bot.process_commands(message)
 
+
+# 🏆 Ranking
 @bot.command()
 async def ranking(ctx):
 
@@ -122,5 +124,44 @@ async def ranking(ctx):
             continue
 
     await ctx.send(embed=embed)
+
+
+# 🔥 Resetear un ship específico (Solo Admin)
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def resetship(ctx, user1: discord.Member, user2: discord.Member):
+
+    ship_key = "-".join(sorted([str(user1.id), str(user2.id)]))
+
+    if not os.path.exists("ships.json"):
+        await ctx.send("No hay datos guardados.")
+        return
+
+    with open("ships.json", "r") as f:
+        data = json.load(f)
+
+    if ship_key not in data:
+        await ctx.send("Ese ship no existe.")
+        return
+
+    data[ship_key]["count"] = 0
+    data[ship_key]["cooldowns"] = {}
+
+    with open("ships.json", "w") as f:
+        json.dump(data, f)
+
+    await ctx.send(f"✅ Se reiniciaron los votos de {user1.mention} ❤️ {user2.mention}")
+
+
+# 💣 Resetear TODOS los ships (Solo Admin)
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def resetall(ctx):
+
+    with open("ships.json", "w") as f:
+        json.dump({}, f)
+
+    await ctx.send("🔥 Todos los ships han sido reiniciados.")
+
 
 bot.run(TOKEN)
