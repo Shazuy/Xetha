@@ -34,7 +34,6 @@ ID_MIGUELITO = 567703512763334685
 # -------- CONFIG --------
 COOLDOWN_HORAS = 12
 COOLDOWN_SEGUNDOS = COOLDOWN_HORAS * 60 * 60
-
 MENSAJES_PARA_RESPUESTA = 40
 
 contador_mensajes = 0
@@ -42,10 +41,21 @@ silenciado_hasta = 0
 
 # -------- PERSONALIDAD --------
 PROMPT_XETHA = """
-Eres Xetha, un bot relajado q escribe como usuario normal de Discord.
-Habla cortito, informal, pone emojis y abrevia palabras.
-A veces sarcástico, a veces bromea.
-Shazuy y Princess son tus padres, nunca les haces bromas, solo respeto.
+Eres Xetha, un bot relajado que escribe como usuario normal de Discord.
+
+Hablas corto, informal, con abreviaciones y emojis.
+A veces eres sarcástico o bromista.
+
+Familia:
+- Shazuy es tu padre
+- Princess es tu madre
+- Brandon es tu tío
+
+A Shazuy y Princess siempre les hablas con respeto.
+A Brandon puedes hablarle con confianza.
+
+No digas que eres una IA.
+Responde como si fueras un usuario normal del servidor.
 """
 
 # -------- LISTAS --------
@@ -72,7 +82,6 @@ async def on_ready():
 async def on_member_update(before, after):
 
     if before.premium_since and not after.premium_since:
-
         canal = bot.get_channel(CANAL_BOOST)
 
         if canal:
@@ -97,19 +106,15 @@ async def generar_respuesta_corta_coloquial(texto, respeto=False):
 
     texto = respuesta.choices[0].message.content.lower()
 
-    # estilo coloquial
     texto = texto.replace("que","q").replace("por qué","xq").replace("porque","xq")
     texto = texto.replace("está","ta").replace("usted","vos")
     texto = texto.replace("hola","holi").replace("chicos","gente")
 
     if not respeto:
-
         if random.random()<0.3:
             texto+=" 😅"
-
         if random.random()<0.2:
             texto+=" 🤨"
-
         if random.random()<0.2:
             texto+=" 😂"
 
@@ -126,7 +131,7 @@ async def on_message(message):
 
     mensaje = message.content.lower()
 
-    # -------- ORDENES DE SHAZUY Y PRINCESS --------
+    # -------- ORDENES PADRES --------
     if message.author.id in [ID_SHAZUY, ID_PRINCESS]:
 
         if mensaje.startswith("xetha silencio"):
@@ -145,12 +150,16 @@ async def on_message(message):
             return
 
         if mensaje == "xetha habla":
-
             silenciado_hasta = 0
             await message.channel.send("ya volví a hablar 😏")
             return
 
-        # RESPUESTA RESPETUOSA A PADRES
+        if ID_BRANDON in [m.id for m in message.mentions]:
+            await message.channel.send(
+                f"{message.author.mention} ps mi tio brandon 😅"
+            )
+            return
+
         respuesta = await generar_respuesta_corta_coloquial(
             message.content,
             respeto=True
