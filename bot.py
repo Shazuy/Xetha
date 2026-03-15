@@ -18,7 +18,7 @@ intents.members = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# -------- IDS IMPORTANTES --------
+# -------- IDS --------
 
 CANAL_SHIPS = 1474938439551025332
 CANAL_REGISTRO = 1474938511890059275
@@ -40,62 +40,50 @@ COOLDOWN_SEGUNDOS = COOLDOWN_HORAS * 60 * 60
 MENSAJES_PARA_RESPUESTA = 20
 contador_mensajes = 0
 
-# -------- PERSONALIDAD DE XETHA --------
+silenciado_hasta = 0
+
+# -------- PERSONALIDAD --------
 
 PROMPT_XETHA = """
 Eres Xetha.
 
 Eres un bot masculino y uno de los guardianes del servidor.
 
-Personalidad:
 Hablas relajado como los usuarios.
-No eres demasiado formal.
 A veces haces bromas.
 A veces eres un poco sarcástico.
 
-Te refieres a ti mismo como hombre.
-
-Familia:
 Tu padre es Shazuy.
 Tu madre es Princess.
-Siempre hablas bien de ellos.
 
-Brandon:
-Es tu tío.
-A veces haces bromas diciendo que te cae un poco mal.
+Brandon es tu tío y a veces haces bromas sobre él.
 
-Pepe y Miguelito:
-Son tus hermanos bots.
+Pepe y Miguelito son tus hermanos bots.
 
-Tus respuestas deben ser cortas o medianas.
-Habla natural como un usuario del chat.
+No escribas textos largos.
+Habla natural como otro usuario.
 """
 
 # -------- LISTAS --------
 
 MALAS_PALABRAS = [
-"puta",
-"mierda",
-"idiota",
-"imbecil",
-"pendejo"
+"puta","mierda","idiota","imbecil","pendejo"
 ]
 
 BROMAS_BRANDON = [
-"Brandon otra vez por aquí… sospechoso 🤨",
+"Brandon otra vez por aquí 🤨",
 "Si Brandon anda aquí seguro algo trama 😅",
-"Brandon siempre aparece cuando menos lo espero."
+"Brandon siempre aparece cuando menos lo espero"
 ]
 
 PREGUNTAS = [
-"¿Quién sigue activo por aquí?",
-"Pregunta random: ¿pizza o hamburguesa? 🍕",
+"¿Quién sigue activo?",
+"Pregunta random: ¿pizza o hamburguesa?",
 "¿Qué están jugando hoy?",
-"¿Alguien viendo alguna serie buena?",
-"¿Quién anda aburrido por aquí?"
+"¿Alguien viendo alguna serie?"
 ]
 
-# -------- ARCHIVO SHIPS --------
+# -------- SHIPS ARCHIVO --------
 
 if not os.path.exists("ships.json"):
     with open("ships.json","w") as f:
@@ -109,16 +97,17 @@ async def mensajes_automaticos():
 
     while not bot.is_closed():
 
-        tiempo = random.randint(900,3600)
+        await asyncio.sleep(random.randint(900,3600))
 
-        await asyncio.sleep(tiempo)
+        if time.time() < silenciado_hasta:
+            continue
 
         canal = bot.get_channel(CANAL_IA)
 
         if canal:
             await canal.send(random.choice(PREGUNTAS))
 
-# -------- BOT LISTO --------
+# -------- READY --------
 
 @bot.event
 async def on_ready():
@@ -127,7 +116,7 @@ async def on_ready():
 
     bot.loop.create_task(mensajes_automaticos())
 
-# -------- DETECTOR BOOST --------
+# -------- BOOST DETECTOR --------
 
 @bot.event
 async def on_member_update(before, after):
@@ -147,54 +136,83 @@ async def on_member_update(before, after):
 async def on_message(message):
 
     global contador_mensajes
+    global silenciado_hasta
 
     if message.author.bot:
         return
 
     mensaje = message.content.lower()
 
-    # -------- DETECTOR MALAS PALABRAS --------
+    # -------- ORDENES DE SHAZUY Y PRINCESS --------
+
+    if message.author.id in [ID_SHAZUY, ID_PRINCESS]:
+
+        if mensaje.startswith("xetha silencio"):
+
+            try:
+
+                minutos = int(mensaje.split(" ")[2])
+
+                silenciado_hasta = time.time() + (minutos * 60)
+
+                await message.channel.send(
+                    f"Entendido {message.author.mention}. Guardaré silencio {minutos} minutos."
+                )
+
+            except:
+                await message.channel.send("Usa: xetha silencio 5")
+
+            return
+
+        if mensaje == "xetha habla":
+
+            silenciado_hasta = 0
+
+            await message.channel.send(
+                "Entendido. Vuelvo a hablar."
+            )
+
+            return
+
+    # -------- SI ESTA SILENCIADO --------
+
+    if time.time() < silenciado_hasta:
+        return
+
+    # -------- MALAS PALABRAS --------
 
     for palabra in MALAS_PALABRAS:
 
         if palabra in mensaje:
 
             await message.channel.send(
-                f"{message.author.mention} ey 😅 bajemos un poco el tono."
+                f"{message.author.mention} ey 😅 bajemos el tono."
             )
             return
 
-    # -------- DETECTAR FAMILIA --------
+    # -------- FAMILIA --------
 
-    if message.author.id == ID_SHAZUY:
-        if random.random() < 0.3:
-            await message.channel.send("Mi padre apareció 👀")
+    if message.author.id == ID_SHAZUY and random.random() < 0.3:
+        await message.channel.send("Mi padre apareció 👀")
 
-    if message.author.id == ID_PRINCESS:
-        if random.random() < 0.3:
-            await message.channel.send("Mi madre está aquí ✨")
+    if message.author.id == ID_PRINCESS and random.random() < 0.3:
+        await message.channel.send("Mi madre está aquí ✨")
 
-    if message.author.id == ID_BRANDON:
-        if random.random() < 0.4:
-            await message.channel.send(random.choice(BROMAS_BRANDON))
+    if message.author.id == ID_BRANDON and random.random() < 0.4:
+        await message.channel.send(random.choice(BROMAS_BRANDON))
 
-    if message.author.id == ID_PEPE:
-        if random.random() < 0.3:
-            await message.channel.send("Pepe deja algo para los demás bots 😆")
+    if message.author.id == ID_PEPE and random.random() < 0.3:
+        await message.channel.send("Pepe deja algo para los demás bots 😆")
 
-    if message.author.id == ID_MIGUELITO:
-        if random.random() < 0.3:
-            await message.channel.send("Miguelito trabajando duro otra vez 🤖")
+    if message.author.id == ID_MIGUELITO and random.random() < 0.3:
+        await message.channel.send("Miguelito trabajando duro otra vez 🤖")
 
-    # -------- SISTEMA SHIPS --------
+    # -------- SHIPS --------
 
     if message.channel.id == CANAL_SHIPS:
 
         if len(message.mentions) != 2:
-
-            await message.channel.send(
-                "❌ Usa el formato: @usuario + @usuario"
-            )
+            await message.channel.send("❌ Usa: @usuario + @usuario")
             return
 
         user1 = message.mentions[0]
@@ -223,7 +241,7 @@ async def on_message(message):
                 minutos = int((restante % 3600) // 60)
 
                 await message.channel.send(
-                    f"⏳ Espera {horas}h {minutos}m para votar otra vez."
+                    f"⏳ Espera {horas}h {minutos}m."
                 )
                 return
 
@@ -243,7 +261,7 @@ async def on_message(message):
 
         await message.add_reaction("❤️")
 
-    # -------- IA SOLO EN CANAL IA --------
+    # -------- IA --------
 
     if message.channel.id == CANAL_IA:
 
@@ -278,12 +296,9 @@ async def on_message(message):
                 f"{message.author.mention} {texto}"
             )
 
-            if random.random() < 0.15:
-                await message.channel.send(random.choice(BROMAS_BRANDON))
-
     await bot.process_commands(message)
 
-# -------- RANKING SHIPS --------
+# -------- RANKING --------
 
 @bot.command()
 async def ranking(ctx):
@@ -330,6 +345,6 @@ async def resetships(ctx):
     with open("ships.json","w") as f:
         json.dump({},f)
 
-    await ctx.send("✅ Los ships fueron reiniciados.")
+    await ctx.send("✅ Ships reiniciados.")
 
 bot.run(TOKEN)
