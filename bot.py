@@ -4,7 +4,6 @@ import json
 import os
 import time
 
-# 🔐 Token seguro
 TOKEN = os.getenv("TOKEN")
 
 intents = discord.Intents.default()
@@ -13,20 +12,24 @@ intents.members = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# 🔧 CAMBIA ESTOS IDs POR LOS DE TU SERVIDOR FINAL
+# 🔧 PON AQUÍ TUS IDs
 CANAL_SHIPS = 1474938439551025332
 CANAL_REGISTRO = 1474938511890059275
+CANAL_BOOSTS = 1482525576785956924
 
 COOLDOWN_HORAS = 12
 COOLDOWN_SEGUNDOS = COOLDOWN_HORAS * 60 * 60
 
-# 📁 Crear archivo si no existe
+
+# Crear archivo si no existe
 if not os.path.exists("ships.json"):
     with open("ships.json", "w") as f:
         json.dump({}, f)
 
+
 @bot.event
 async def on_message(message):
+
     if message.author.bot:
         return
 
@@ -53,12 +56,13 @@ async def on_message(message):
 
         ahora = time.time()
 
-        # 🔥 Verificar cooldown
         if author_id in data[ship_key]["cooldowns"]:
+
             ultimo_voto = data[ship_key]["cooldowns"][author_id]
             tiempo_restante = COOLDOWN_SEGUNDOS - (ahora - ultimo_voto)
 
             if tiempo_restante > 0:
+
                 horas = int(tiempo_restante // 3600)
                 minutos = int((tiempo_restante % 3600) // 60)
 
@@ -67,7 +71,6 @@ async def on_message(message):
                 )
                 return
 
-        # ✅ Registrar voto
         data[ship_key]["count"] += 1
         data[ship_key]["cooldowns"][author_id] = ahora
 
@@ -86,7 +89,7 @@ async def on_message(message):
     await bot.process_commands(message)
 
 
-# 🏆 Ranking
+# Ranking
 @bot.command()
 async def ranking(ctx):
 
@@ -109,9 +112,11 @@ async def ranking(ctx):
     )
 
     for i, (ship, info) in enumerate(sorted_ships[:10], 1):
+
         ids = ship.split("-")
 
         try:
+
             user1 = await bot.fetch_user(int(ids[0]))
             user2 = await bot.fetch_user(int(ids[1]))
 
@@ -120,22 +125,19 @@ async def ranking(ctx):
                 value=f"{info['count']} votos",
                 inline=False
             )
+
         except:
             continue
 
     await ctx.send(embed=embed)
 
 
-# 🔥 Resetear un ship específico (Solo Admin)
+# Reset ship específico
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def resetship(ctx, user1: discord.Member, user2: discord.Member):
 
     ship_key = "-".join(sorted([str(user1.id), str(user2.id)]))
-
-    if not os.path.exists("ships.json"):
-        await ctx.send("No hay datos guardados.")
-        return
 
     with open("ships.json", "r") as f:
         data = json.load(f)
@@ -150,10 +152,10 @@ async def resetship(ctx, user1: discord.Member, user2: discord.Member):
     with open("ships.json", "w") as f:
         json.dump(data, f)
 
-    await ctx.send(f"✅ Se reiniciaron los votos de {user1.mention} ❤️ {user2.mention}")
+    await ctx.send(f"✅ Ship reiniciado: {user1.mention} ❤️ {user2.mention}")
 
 
-# 💣 Resetear TODOS los ships (Solo Admin)
+# Reset total
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def resetall(ctx):
@@ -162,6 +164,28 @@ async def resetall(ctx):
         json.dump({}, f)
 
     await ctx.send("🔥 Todos los ships han sido reiniciados.")
+
+
+# Detectar cuando alguien pierde boost
+@bot.event
+async def on_member_update(before, after):
+
+    booster_role = discord.utils.get(before.guild.roles, name="Server Booster")
+
+    if booster_role is None:
+        return
+
+    tenia_boost = booster_role in before.roles
+    tiene_boost = booster_role in after.roles
+
+    if tenia_boost and not tiene_boost:
+
+        canal = bot.get_channel(CANAL_BOOSTS)
+
+        if canal:
+            await canal.send(
+                f"⚠️ {after.mention} ha dejado de boostear el servidor."
+            )
 
 
 bot.run(TOKEN)
