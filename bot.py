@@ -39,6 +39,10 @@ MENSAJES_PARA_RESPUESTA = 40
 contador_mensajes = 0
 silenciado_hasta = 0
 
+# -------- MEMORIA CONVERSACION --------
+historial_canales = {}
+MAX_HISTORIAL = 20
+
 # -------- PERSONALIDAD --------
 PROMPT_XETHA = """
 Eres Xetha, un bot relajado que escribe como usuario normal de Discord.
@@ -87,38 +91,46 @@ async def on_member_update(before, after):
         if canal:
             await canal.send(f"⚠️ {after.mention} ya no ta boosteando el server")
 
-# -------- FUNCION RESPUESTA IA --------
-async def generar_respuesta_corta_coloquial(texto, respeto=False):
+# -------- FUNCION IA --------
+async def generar_respuesta_corta_coloquial(canal_id, texto, respeto=False):
 
     prompt = PROMPT_XETHA
 
     if respeto:
         prompt += "\nResponde siempre con respeto, sin bromas ni sarcasmo."
 
+    if canal_id not in historial_canales:
+        historial_canales[canal_id] = []
+
+    historial_canales[canal_id].append({
+        "role": "user",
+        "content": texto
+    })
+
+    historial_canales[canal_id] = historial_canales[canal_id][-MAX_HISTORIAL:]
+
+    mensajes = [{"role": "system", "content": prompt}] + historial_canales[canal_id]
+
     respuesta = client_ai.chat.completions.create(
         model="gpt-4o-mini",
-        messages=[
-            {"role":"system","content":prompt},
-            {"role":"user","content":texto}
-        ],
-        max_tokens=50
+        messages=mensajes,
+        max_tokens=60
     )
 
-    texto = respuesta.choices[0].message.content.lower()
+    texto_respuesta = respuesta.choices[0].message.content
 
-    texto = texto.replace("que","q").replace("por qué","xq").replace("porque","xq")
-    texto = texto.replace("está","ta").replace("usted","vos")
-    texto = texto.replace("hola","holi").replace("chicos","gente")
+    historial_canales[canal_id].append({
+        "role": "assistant",
+        "content": texto_respuesta
+    })
 
-    if not respeto:
-        if random.random()<0.3:
-            texto+=" 😅"
-        if random.random()<0.2:
-            texto+=" 🤨"
-        if random.random()<0.2:
-            texto+=" 😂"
+    historial_canales[canal_id] = historial_canales[canal_id][-MAX_HISTORIAL:]
 
-    return texto
+    # limpiar memoria si hay demasiados canales
+    if len(historial_canales) > 50:
+        historial_canales.clear()
+
+    return texto_respuesta
 
 # -------- MENSAJES --------
 @bot.event
@@ -132,7 +144,7 @@ async def on_message(message):
     mensaje = message.content.lower()
 
     # -------- ORDENES PADRES --------
-    if message.author.id in [ID_SHAZUY, ID_PRINCESS]:
+    if message.author.id == ID_SHAZUY or message.author.id == ID_PRINCESS:
 
         if mensaje.startswith("xetha silencio"):
 
@@ -161,6 +173,7 @@ async def on_message(message):
             return
 
         respuesta = await generar_respuesta_corta_coloquial(
+            message.channel.id,
             message.content,
             respeto=True
         )
@@ -258,6 +271,7 @@ async def on_message(message):
         if activar:
 
             respuesta = await generar_respuesta_corta_coloquial(
+                message.channel.id,
                 message.content
             )
 
