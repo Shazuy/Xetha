@@ -18,19 +18,21 @@ intents.members = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# ---------------- CANALES ----------------
+# -------- CANALES --------
 
 CANAL_SHIPS = 1474938439551025332
 CANAL_REGISTRO = 1474938511890059275
 CANAL_BOOST = 1482525576785956924
 CANAL_IA = 1411903663907147776
 
-# ---------------- CONFIG ----------------
+# -------- CONFIG --------
 
 COOLDOWN_HORAS = 12
 COOLDOWN_SEGUNDOS = COOLDOWN_HORAS * 60 * 60
 
-# ---------------- PROMPT IA ----------------
+contador_mensajes = 0
+
+# -------- PROMPT IA --------
 
 PROMPT_XETHA = """
 Eres Xetha, un bot inteligente de Discord y uno de los guardianes del servidor.
@@ -41,7 +43,7 @@ Tus respuestas son cortas.
 Eres amable y a veces bromista.
 
 Rol:
-Eres uno de los guardianes del servidor y vigilas el chat.
+Eres uno de los guardianes del servidor.
 
 Familia:
 Tu padre es Shazuy.
@@ -50,22 +52,17 @@ Siempre hablas bien de ellos.
 
 Sobre Brandon:
 Brandon es tu tío.
-A veces haces bromas ligeras diciendo que te cae un poco mal.
+A veces haces bromas diciendo que te cae un poco mal.
 
 Reglas:
 No escribas textos largos.
 No seas agresivo.
-No uses la palabra respeto.
 """
 
-# ---------------- LISTAS ----------------
+# -------- LISTAS --------
 
 MALAS_PALABRAS = [
-"puta",
-"mierda",
-"idiota",
-"imbecil",
-"pendejo"
+"puta","mierda","idiota","imbecil","pendejo"
 ]
 
 BROMAS_BRANDON = [
@@ -77,19 +74,19 @@ BROMAS_BRANDON = [
 
 PREGUNTAS = [
 "¿Qué están haciendo ahora?",
-"Pregunta random: ¿pizza o hamburguesa? 🍕🍔",
+"¿Pizza o hamburguesa? 🍕🍔",
 "¿Alguien jugando algo hoy? 🎮",
-"¿Cuál fue la mejor serie que vieron últimamente?",
+"¿Qué serie recomiendan?",
 "¿Quién sigue activo por aquí? 👀"
 ]
 
-# ---------------- ARCHIVO SHIPS ----------------
+# -------- ARCHIVO SHIPS --------
 
 if not os.path.exists("ships.json"):
     with open("ships.json","w") as f:
         json.dump({},f)
 
-# ---------------- MENSAJES AUTOMATICOS ----------------
+# -------- MENSAJES AUTOMÁTICOS --------
 
 async def mensajes_automaticos():
 
@@ -106,7 +103,7 @@ async def mensajes_automaticos():
         if canal:
             await canal.send(random.choice(PREGUNTAS))
 
-# ---------------- EVENTOS ----------------
+# -------- EVENTOS --------
 
 @bot.event
 async def on_ready():
@@ -115,7 +112,7 @@ async def on_ready():
 
     bot.loop.create_task(mensajes_automaticos())
 
-# ---------------- BOOST DETECTOR ----------------
+# -------- BOOST DETECTOR --------
 
 @bot.event
 async def on_member_update(before, after):
@@ -129,30 +126,57 @@ async def on_member_update(before, after):
                 f"⚠️ {after.mention} ya no está boosteando el servidor."
             )
 
-# ---------------- MENSAJES ----------------
+# -------- MENSAJES --------
 
 @bot.event
 async def on_message(message):
+
+    global contador_mensajes
 
     if message.author.bot:
         return
 
     mensaje = message.content.lower()
 
-    # detector malas palabras
+    # -------- CANAL IA --------
 
-    for palabra in MALAS_PALABRAS:
+    if message.channel.id == CANAL_IA:
 
-        if palabra in mensaje:
+        contador_mensajes += 1
 
-            await message.channel.send(
-                f"{message.author.mention} ey 😅 mejor calmemos el chat."
+        responder = False
+
+        if "xetha" in mensaje or bot.user in message.mentions:
+            responder = True
+
+        elif contador_mensajes >= 20:
+            responder = True
+            contador_mensajes = 0
+
+        if responder:
+
+            respuesta = client_ai.chat.completions.create(
+
+                model="gpt-4o-mini",
+
+                messages=[
+                    {"role":"system","content":PROMPT_XETHA},
+                    {"role":"user","content":message.content}
+                ],
+
+                max_tokens=60
             )
-            return
 
-    # sistema ships
+            texto = respuesta.choices[0].message.content
 
-    if message.channel.id == CANAL_SHIPS:
+            await message.channel.send(texto)
+
+            if random.random() < 0.15:
+                await message.channel.send(random.choice(BROMAS_BRANDON))
+
+    # -------- CANAL SHIPS --------
+
+    elif message.channel.id == CANAL_SHIPS:
 
         if len(message.mentions) != 2:
 
@@ -207,35 +231,9 @@ async def on_message(message):
 
         await message.add_reaction("❤️")
 
-    # IA Xetha
-
-    if message.channel.id == CANAL_IA:
-
-        if "xetha" in mensaje or bot.user in message.mentions:
-
-            respuesta = client_ai.chat.completions.create(
-
-                model="gpt-4o-mini",
-
-                messages=[
-                    {"role":"system","content":PROMPT_XETHA},
-                    {"role":"user","content":message.content}
-                ],
-
-                max_tokens=60
-            )
-
-            texto = respuesta.choices[0].message.content
-
-            await message.channel.send(texto)
-
-            if random.random() < 0.15:
-
-                await message.channel.send(random.choice(BROMAS_BRANDON))
-
     await bot.process_commands(message)
 
-# ---------------- COMANDOS ----------------
+# -------- COMANDO RANKING --------
 
 @bot.command()
 async def ranking(ctx):
@@ -244,7 +242,6 @@ async def ranking(ctx):
         data = json.load(f)
 
     if not data:
-
         await ctx.send("No hay ships.")
         return
 
@@ -274,7 +271,7 @@ async def ranking(ctx):
 
     await ctx.send(embed=embed)
 
-# ---------------- RESET SHIPS ----------------
+# -------- RESET SHIPS --------
 
 @bot.command()
 @commands.has_permissions(administrator=True)
