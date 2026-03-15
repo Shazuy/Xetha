@@ -6,11 +6,13 @@ import time
 import random
 from openai import OpenAI
 
+# -------- TOKENS --------
 TOKEN = os.getenv("TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 client_ai = OpenAI(api_key=OPENAI_API_KEY)
 
+# -------- INTENTS --------
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
@@ -26,7 +28,6 @@ CANAL_IA = 1411903663907147776
 ID_SHAZUY = 337008758041608194
 ID_PRINCESS = 701313482972332043
 ID_BRANDON = 1021829995590598696
-
 ID_PEPE = 974297735559806986
 ID_MIGUELITO = 567703512763334685
 
@@ -35,15 +36,16 @@ COOLDOWN_HORAS = 12
 COOLDOWN_SEGUNDOS = COOLDOWN_HORAS * 60 * 60
 
 MENSAJES_PARA_RESPUESTA = 40
+
 contador_mensajes = 0
 silenciado_hasta = 0
 
 # -------- PERSONALIDAD --------
 PROMPT_XETHA = """
-Eres Xetha, un bot relajado q escribe como usuario normal de Discord
-Habla cortito, informal, pone emojis y abrevia palabras
-A veces sarcástico, a veces bromea, escribe sin preocuparse x ortografía
-Shazuy y Princess son tus padres, nunca les haces bromas, solo respeto
+Eres Xetha, un bot relajado q escribe como usuario normal de Discord.
+Habla cortito, informal, pone emojis y abrevia palabras.
+A veces sarcástico, a veces bromea.
+Shazuy y Princess son tus padres, nunca les haces bromas, solo respeto.
 """
 
 # -------- LISTAS --------
@@ -55,7 +57,7 @@ BROMAS_BRANDON = [
     "brandon aparece cuando menos lo espero jaja"
 ]
 
-# -------- SHIPS ARCHIVO --------
+# -------- ARCHIVO SHIPS --------
 if not os.path.exists("ships.json"):
     with open("ships.json","w") as f:
         json.dump({},f)
@@ -68,138 +70,193 @@ async def on_ready():
 # -------- BOOST DETECTOR --------
 @bot.event
 async def on_member_update(before, after):
+
     if before.premium_since and not after.premium_since:
+
         canal = bot.get_channel(CANAL_BOOST)
+
         if canal:
             await canal.send(f"⚠️ {after.mention} ya no ta boosteando el server")
 
-# -------- ESTILO COLOQUIAL --------
-def estilo_coloquial(texto):
-    texto = texto.lower()
-    texto = texto.replace("que", "q").replace("por qué","xq").replace("porque","xq").replace("está","ta")
-    texto = texto.replace("usted","vos").replace("hola","holi").replace("chicos","gente").replace("verdad","neta")
-    if random.random()<0.3: texto+=" 😅"
-    if random.random()<0.2: texto+=" 🤨"
-    if random.random()<0.2: texto+=" 😂"
+# -------- FUNCION RESPUESTA IA --------
+async def generar_respuesta_corta_coloquial(texto, respeto=False):
+
+    prompt = PROMPT_XETHA
+
+    if respeto:
+        prompt += "\nResponde siempre con respeto, sin bromas ni sarcasmo."
+
+    respuesta = client_ai.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role":"system","content":prompt},
+            {"role":"user","content":texto}
+        ],
+        max_tokens=50
+    )
+
+    texto = respuesta.choices[0].message.content.lower()
+
+    # estilo coloquial
+    texto = texto.replace("que","q").replace("por qué","xq").replace("porque","xq")
+    texto = texto.replace("está","ta").replace("usted","vos")
+    texto = texto.replace("hola","holi").replace("chicos","gente")
+
+    if not respeto:
+
+        if random.random()<0.3:
+            texto+=" 😅"
+
+        if random.random()<0.2:
+            texto+=" 🤨"
+
+        if random.random()<0.2:
+            texto+=" 😂"
+
     return texto
 
 # -------- MENSAJES --------
 @bot.event
 async def on_message(message):
+
     global contador_mensajes, silenciado_hasta
+
     if message.author.bot:
         return
 
     mensaje = message.content.lower()
 
-    # ORDENES DE SHAZUY Y PRINCESS (respeto absoluto)
+    # -------- ORDENES DE SHAZUY Y PRINCESS --------
     if message.author.id in [ID_SHAZUY, ID_PRINCESS]:
+
         if mensaje.startswith("xetha silencio"):
+
             try:
                 minutos = int(mensaje.split(" ")[2])
                 silenciado_hasta = time.time() + minutos*60
-                await message.channel.send(f"ok {message.author.mention} me callo {minutos} min 😎")
+
+                await message.channel.send(
+                    f"ok {message.author.mention} me callo {minutos} min 😎"
+                )
+
             except:
                 await message.channel.send("usa: xetha silencio 5")
+
             return
+
         if mensaje == "xetha habla":
+
             silenciado_hasta = 0
             await message.channel.send("ya volví a hablar 😏")
             return
 
-    # SI ESTA SILENCIADO
+        # RESPUESTA RESPETUOSA A PADRES
+        respuesta = await generar_respuesta_corta_coloquial(
+            message.content,
+            respeto=True
+        )
+
+        await message.channel.send(f"{message.author.mention} {respuesta}")
+        return
+
+    # -------- SI ESTA SILENCIADO --------
     if time.time() < silenciado_hasta:
         return
 
-    # MALAS PALABRAS (solo canal IA y pocas veces)
+    # -------- MALAS PALABRAS --------
     if message.channel.id == CANAL_IA and random.random()<0.15:
+
         for palabra in MALAS_PALABRAS:
+
             if palabra in mensaje:
-                await message.channel.send(f"{message.author.mention} ey tranqui 😅")
+                await message.channel.send(
+                    f"{message.author.mention} ey tranqui 😅"
+                )
                 return
 
-    # FAMILIA
+    # -------- FAMILIA --------
     if message.author.id == ID_BRANDON and random.random()<0.4:
         await message.channel.send(random.choice(BROMAS_BRANDON))
+
     if message.author.id == ID_PEPE and random.random()<0.3:
         await message.channel.send("pepe deja algo pa los demas 😆")
+
     if message.author.id == ID_MIGUELITO and random.random()<0.3:
         await message.channel.send("miguelito dándolo todo 🤖")
 
-    # SHIPS
+    # -------- SHIPS --------
     if message.channel.id == CANAL_SHIPS:
+
         if len(message.mentions)!=2:
             await message.channel.send("❌ usa: @usuario + @usuario")
             return
+
         user1,user2 = message.mentions[0], message.mentions[1]
+
         ship_key = "-".join(sorted([str(user1.id),str(user2.id)]))
         author_id = str(message.author.id)
+
         with open("ships.json","r") as f:
             data = json.load(f)
+
         if ship_key not in data:
             data[ship_key] = {"count":0,"cooldowns":{}}
+
         ahora = time.time()
+
         if author_id in data[ship_key]["cooldowns"]:
+
             ultimo = data[ship_key]["cooldowns"][author_id]
             restante = COOLDOWN_SEGUNDOS-(ahora-ultimo)
+
             if restante>0:
+
                 h = int(restante//3600)
                 m = int((restante%3600)//60)
+
                 await message.channel.send(f"⏳ espera {h}h {m}m")
                 return
+
         data[ship_key]["count"]+=1
         data[ship_key]["cooldowns"][author_id]=ahora
+
         with open("ships.json","w") as f:
             json.dump(data,f)
+
         canal = bot.get_channel(CANAL_REGISTRO)
+
         if canal:
-            await canal.send(f"📌 nuevo ship\n{user1.mention} ❤️ {user2.mention}\nVotos: {data[ship_key]['count']}")
+            await canal.send(
+                f"📌 nuevo ship\n{user1.mention} ❤️ {user2.mention}\n"
+                f"Votos: {data[ship_key]['count']}"
+            )
+
         await message.add_reaction("❤️")
 
-    # IA
+    # -------- IA --------
     if message.channel.id == CANAL_IA:
+
         contador_mensajes +=1
         activar = False
+
         if "xetha" in mensaje or bot.user in message.mentions:
             activar=True
+
         if contador_mensajes >= MENSAJES_PARA_RESPUESTA:
             activar=True
             contador_mensajes=0
+
         if activar:
-            respuesta = client_ai.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[{"role":"system","content":PROMPT_XETHA},{"role":"user","content":message.content}],
-                max_tokens=80
+
+            respuesta = await generar_respuesta_corta_coloquial(
+                message.content
             )
-            texto = respuesta.choices[0].message.content
-            texto = estilo_coloquial(texto)
-            await message.channel.send(f"{message.author.mention} {texto}")
+
+            await message.channel.send(
+                f"{message.author.mention} {respuesta}"
+            )
 
     await bot.process_commands(message)
 
-# RANKING
-@bot.command()
-async def ranking(ctx):
-    with open("ships.json","r") as f:
-        data=json.load(f)
-    if not data:
-        await ctx.send("no hay ships")
-        return
-    sorted_ships=sorted(data.items(), key=lambda x:x[1]["count"], reverse=True)
-    embed=discord.Embed(title="🏆 ranking ships", color=discord.Color.pink())
-    for i,(ship,info) in enumerate(sorted_ships[:10],1):
-        ids=ship.split("-")
-        user1=await bot.fetch_user(int(ids[0]))
-        user2=await bot.fetch_user(int(ids[1]))
-        embed.add_field(name=f"{i}. {user1.name} ❤️ {user2.name}", value=f"{info['count']} votos", inline=False)
-    await ctx.send(embed=embed)
-
-# RESET SHIPS
-@bot.command()
-@commands.has_permissions(administrator=True)
-async def resetships(ctx):
-    with open("ships.json","w") as f:
-        json.dump({},f)
-    await ctx.send("✅ ships reiniciados")
-
+# -------- RUN BOT --------
 bot.run(TOKEN)
