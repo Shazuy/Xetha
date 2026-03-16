@@ -4,15 +4,14 @@ import json
 import os
 import time
 import random
+import re
 from openai import OpenAI
 
-# -------- TOKENS --------
 TOKEN = os.getenv("TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 client_ai = OpenAI(api_key=OPENAI_API_KEY)
 
-# -------- INTENTS --------
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
@@ -32,44 +31,38 @@ ID_PEPE = 974297735559806986
 ID_MIGUELITO = 567703512763334685
 
 # -------- CONFIG --------
-COOLDOWN_HORAS = 12
-COOLDOWN_SEGUNDOS = COOLDOWN_HORAS * 60 * 60
-MENSAJES_PARA_RESPUESTA = 40
-
+MENSAJES_PARA_RESPUESTA = 30
 contador_mensajes = 0
 silenciado_hasta = 0
 
-# -------- MEMORIA CONVERSACION --------
+# -------- MEMORIA --------
 historial_canales = {}
 MAX_HISTORIAL = 20
 
 # -------- PERSONALIDAD --------
 PROMPT_XETHA = """
-Eres Xetha, un bot relajado que escribe como usuario normal de Discord.
+Te llamas Xetha.
 
-Hablas corto, informal, con abreviaciones y emojis.
-A veces eres sarcástico o bromista.
+No eres un bot, eres una persona del servidor.
+
+Hablas corto, informal, con abreviaciones y errores de ortografía.
+
+Evita usar muchas comas o puntos.
 
 Familia:
-- Shazuy es tu padre
-- Princess es tu madre
-- Brandon es tu tío
+Shazuy es tu padre
+Princess es tu madre
+Brandon es tu tio
 
-A Shazuy y Princess siempre les hablas con respeto.
-A Brandon puedes hablarle con confianza.
+Solo obedeces a Shazuy y Princess.
 
-No digas que eres una IA.
-Responde como si fueras un usuario normal del servidor.
+Si alguien habla mal de tus padres los defiendes.
+
+Habla como usuario normal de discord.
 """
 
 # -------- LISTAS --------
-MALAS_PALABRAS = ["puta","mierda","idiota","imbecil","pendejo"]
-
-BROMAS_BRANDON = [
-    "brandon otra vez por aki 🤨",
-    "si brandon ta aki seguro arma algo 😅",
-    "brandon aparece cuando menos lo espero jaja"
-]
+MALAS_PALABRAS = ["puta","mierda","idiota","imbecil","estupido"]
 
 # -------- ARCHIVO SHIPS --------
 if not os.path.exists("ships.json"):
@@ -81,35 +74,58 @@ if not os.path.exists("ships.json"):
 async def on_ready():
     print(f"xetha conectado como {bot.user}")
 
-# -------- BOOST DETECTOR --------
+# -------- BOOST --------
 @bot.event
 async def on_member_update(before, after):
 
     if before.premium_since and not after.premium_since:
+
         canal = bot.get_channel(CANAL_BOOST)
 
         if canal:
             await canal.send(f"⚠️ {after.mention} ya no ta boosteando el server")
 
-# -------- FUNCION IA --------
-async def generar_respuesta_corta_coloquial(canal_id, texto, respeto=False):
+# -------- ESTILO --------
+def estilo_xetha(texto):
 
-    prompt = PROMPT_XETHA
+    texto = texto.lower()
 
-    if respeto:
-        prompt += "\nResponde siempre con respeto, sin bromas ni sarcasmo."
+    cambios = {
+        "que":"q",
+        "porque":"xq",
+        "por qué":"xq",
+        "para":"pa",
+        "estoy":"toy",
+        "muy":"mu",
+        "verdad":"neta"
+    }
+
+    for a,b in cambios.items():
+        texto = texto.replace(a,b)
+
+    texto = texto.replace(",","")
+    texto = texto.replace(".","")
+
+    return texto
+
+# -------- DETECTAR EMOJIS --------
+def detectar_emojis(texto):
+    return re.findall(r"<a?:\w+:\d+>", texto)
+
+# -------- IA --------
+async def generar_respuesta(canal_id, texto):
 
     if canal_id not in historial_canales:
         historial_canales[canal_id] = []
 
     historial_canales[canal_id].append({
-        "role": "user",
-        "content": texto
+        "role":"user",
+        "content":texto
     })
 
     historial_canales[canal_id] = historial_canales[canal_id][-MAX_HISTORIAL:]
 
-    mensajes = [{"role": "system", "content": prompt}] + historial_canales[canal_id]
+    mensajes = [{"role":"system","content":PROMPT_XETHA}] + historial_canales[canal_id]
 
     respuesta = client_ai.chat.completions.create(
         model="gpt-4o-mini",
@@ -120,15 +136,13 @@ async def generar_respuesta_corta_coloquial(canal_id, texto, respeto=False):
     texto_respuesta = respuesta.choices[0].message.content
 
     historial_canales[canal_id].append({
-        "role": "assistant",
-        "content": texto_respuesta
+        "role":"assistant",
+        "content":texto_respuesta
     })
 
     historial_canales[canal_id] = historial_canales[canal_id][-MAX_HISTORIAL:]
 
-    # limpiar memoria si hay demasiados canales
-    if len(historial_canales) > 50:
-        historial_canales.clear()
+    texto_respuesta = estilo_xetha(texto_respuesta)
 
     return texto_respuesta
 
@@ -136,75 +150,22 @@ async def generar_respuesta_corta_coloquial(canal_id, texto, respeto=False):
 @bot.event
 async def on_message(message):
 
-    global contador_mensajes, silenciado_hasta
+    global contador_mensajes
 
     if message.author.bot:
         return
 
     mensaje = message.content.lower()
 
-    # -------- ORDENES PADRES --------
-    if message.author.id == ID_SHAZUY or message.author.id == ID_PRINCESS:
+    # -------- DEFENDER PADRES --------
+    if "shazuy" in mensaje or "princess" in mensaje:
 
-        if mensaje.startswith("xetha silencio"):
+        if any(p in mensaje for p in MALAS_PALABRAS):
 
-            try:
-                minutos = int(mensaje.split(" ")[2])
-                silenciado_hasta = time.time() + minutos*60
-
-                await message.channel.send(
-                    f"ok {message.author.mention} me callo {minutos} min 😎"
-                )
-
-            except:
-                await message.channel.send("usa: xetha silencio 5")
-
-            return
-
-        if mensaje == "xetha habla":
-            silenciado_hasta = 0
-            await message.channel.send("ya volví a hablar 😏")
-            return
-
-        if ID_BRANDON in [m.id for m in message.mentions]:
             await message.channel.send(
-                f"{message.author.mention} ps mi tio brandon 😅"
+                f"{message.author.mention} respeta a mis padres 🤨"
             )
             return
-
-        respuesta = await generar_respuesta_corta_coloquial(
-            message.channel.id,
-            message.content,
-            respeto=True
-        )
-
-        await message.channel.send(f"{message.author.mention} {respuesta}")
-        return
-
-    # -------- SI ESTA SILENCIADO --------
-    if time.time() < silenciado_hasta:
-        return
-
-    # -------- MALAS PALABRAS --------
-    if message.channel.id == CANAL_IA and random.random()<0.15:
-
-        for palabra in MALAS_PALABRAS:
-
-            if palabra in mensaje:
-                await message.channel.send(
-                    f"{message.author.mention} ey tranqui 😅"
-                )
-                return
-
-    # -------- FAMILIA --------
-    if message.author.id == ID_BRANDON and random.random()<0.4:
-        await message.channel.send(random.choice(BROMAS_BRANDON))
-
-    if message.author.id == ID_PEPE and random.random()<0.3:
-        await message.channel.send("pepe deja algo pa los demas 😆")
-
-    if message.author.id == ID_MIGUELITO and random.random()<0.3:
-        await message.channel.send("miguelito dándolo todo 🤖")
 
     # -------- SHIPS --------
     if message.channel.id == CANAL_SHIPS:
@@ -222,25 +183,9 @@ async def on_message(message):
             data = json.load(f)
 
         if ship_key not in data:
-            data[ship_key] = {"count":0,"cooldowns":{}}
+            data[ship_key] = {"count":0}
 
-        ahora = time.time()
-
-        if author_id in data[ship_key]["cooldowns"]:
-
-            ultimo = data[ship_key]["cooldowns"][author_id]
-            restante = COOLDOWN_SEGUNDOS-(ahora-ultimo)
-
-            if restante>0:
-
-                h = int(restante//3600)
-                m = int((restante%3600)//60)
-
-                await message.channel.send(f"⏳ espera {h}h {m}m")
-                return
-
-        data[ship_key]["count"]+=1
-        data[ship_key]["cooldowns"][author_id]=ahora
+        data[ship_key]["count"] += 1
 
         with open("ships.json","w") as f:
             json.dump(data,f)
@@ -255,31 +200,39 @@ async def on_message(message):
 
         await message.add_reaction("❤️")
 
-    # -------- IA --------
-    if message.channel.id == CANAL_IA:
+        return
 
-        contador_mensajes +=1
-        activar = False
+    # -------- SOLO CANAL IA --------
+    if message.channel.id != CANAL_IA:
+        return
 
-        if "xetha" in mensaje or bot.user in message.mentions:
-            activar=True
+    contador_mensajes += 1
 
-        if contador_mensajes >= MENSAJES_PARA_RESPUESTA:
-            activar=True
-            contador_mensajes=0
+    activar = False
 
-        if activar:
+    if bot.user in message.mentions:
+        activar = True
 
-            respuesta = await generar_respuesta_corta_coloquial(
-                message.channel.id,
-                message.content
-            )
+    if contador_mensajes >= MENSAJES_PARA_RESPUESTA:
+        activar = True
+        contador_mensajes = 0
 
-            await message.channel.send(
-                f"{message.author.mention} {respuesta}"
-            )
+    if activar:
+
+        respuesta = await generar_respuesta(
+            message.channel.id,
+            message.content
+        )
+
+        emojis = detectar_emojis(message.content)
+
+        if emojis and random.random() < 0.4:
+            respuesta += " " + random.choice(emojis)
+
+        await message.channel.send(
+            f"{message.author.mention} {respuesta}"
+        )
 
     await bot.process_commands(message)
 
-# -------- RUN BOT --------
 bot.run(TOKEN)
