@@ -19,6 +19,7 @@ intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # -------- IDS --------
+
 CANAL_SHIPS = 1474938439551025332
 CANAL_REGISTRO = 1474938511890059275
 CANAL_BOOST = 1482525576785956924
@@ -31,61 +32,57 @@ ID_PEPE = 974297735559806986
 ID_MIGUELITO = 567703512763334685
 
 # -------- CONFIG --------
+
 MENSAJES_PARA_RESPUESTA = 30
 contador_mensajes = 0
-silenciado_hasta = 0
 
-# -------- MEMORIA --------
-historial_canales = {}
 MAX_HISTORIAL = 20
+historial_canales = {}
 
-# -------- PERSONALIDAD --------
+USUARIOS_FILE = "usuarios.json"
+
+# -------- ARCHIVOS --------
+
+if not os.path.exists("ships.json"):
+    with open("ships.json","w") as f:
+        json.dump({},f)
+
+if not os.path.exists(USUARIOS_FILE):
+    with open(USUARIOS_FILE,"w") as f:
+        json.dump({},f)
+
+# -------- PROMPT --------
+
 PROMPT_XETHA = """
 Te llamas Xetha.
 
-No eres un bot, eres una persona del servidor.
+No eres un bot.
+Eres una persona del servidor.
 
-Hablas corto, informal, con abreviaciones y errores de ortografía.
+Hablas corto informal con abreviaciones.
 
-Evita usar muchas comas o puntos.
+Evita muchas comas y puntos.
 
 Familia:
 Shazuy es tu padre
 Princess es tu madre
 Brandon es tu tio
 
-Solo obedeces a Shazuy y Princess.
+Tratas a tus padres con mucho respeto y cariño.
+
+Solo obedeces a tus padres.
 
 Si alguien habla mal de tus padres los defiendes.
 
-Habla como usuario normal de discord.
+Hablas como usuario normal de discord.
 """
 
-# -------- LISTAS --------
-MALAS_PALABRAS = ["puta","mierda","idiota","imbecil","estupido"]
+# -------- PALABRAS --------
 
-# -------- ARCHIVO SHIPS --------
-if not os.path.exists("ships.json"):
-    with open("ships.json","w") as f:
-        json.dump({},f)
-
-# -------- READY --------
-@bot.event
-async def on_ready():
-    print(f"xetha conectado como {bot.user}")
-
-# -------- BOOST --------
-@bot.event
-async def on_member_update(before, after):
-
-    if before.premium_since and not after.premium_since:
-
-        canal = bot.get_channel(CANAL_BOOST)
-
-        if canal:
-            await canal.send(f"⚠️ {after.mention} ya no ta boosteando el server")
+MALAS_PALABRAS = ["idiota","puta","mierda","imbecil","estupido"]
 
 # -------- ESTILO --------
+
 def estilo_xetha(texto):
 
     texto = texto.lower()
@@ -103,20 +100,94 @@ def estilo_xetha(texto):
     for a,b in cambios.items():
         texto = texto.replace(a,b)
 
-    texto = texto.replace(",","")
-    texto = texto.replace(".","")
+    texto = texto.replace(",", "")
+    texto = texto.replace(".", "")
 
     return texto
 
-# -------- DETECTAR EMOJIS --------
+# -------- EMOJIS --------
+
 def detectar_emojis(texto):
     return re.findall(r"<a?:\w+:\d+>", texto)
 
+# -------- MEMORIA USUARIOS --------
+
+def registrar_usuario(user):
+
+    with open(USUARIOS_FILE,"r") as f:
+        data = json.load(f)
+
+    uid = str(user.id)
+
+    if uid not in data:
+
+        data[uid] = {
+            "nombre":user.display_name,
+            "mensajes":0,
+            "relacion":"neutral"
+        }
+
+    data[uid]["mensajes"] += 1
+
+    with open(USUARIOS_FILE,"w") as f:
+        json.dump(data,f)
+
+    return data[uid]
+
+def analizar_usuario(user_id,mensaje):
+
+    with open(USUARIOS_FILE,"r") as f:
+        data = json.load(f)
+
+    uid = str(user_id)
+
+    if uid not in data:
+        return
+
+    if any(p in mensaje for p in MALAS_PALABRAS):
+
+        data[uid]["relacion"] = "conflictivo"
+
+    with open(USUARIOS_FILE,"w") as f:
+        json.dump(data,f)
+
 # -------- IA --------
-async def generar_respuesta(canal_id, texto):
+
+async def generar_respuesta(canal_id,texto,autor_id):
 
     if canal_id not in historial_canales:
         historial_canales[canal_id] = []
+
+    if autor_id == ID_SHAZUY:
+
+        texto = f"""
+Mensaje de Shazuy tu padre.
+
+Debes tratarlo con respeto y cariño.
+
+Mensaje:
+{texto}
+"""
+
+    elif autor_id == ID_PRINCESS:
+
+        texto = f"""
+Mensaje de Princess tu madre.
+
+Debes tratarla con respeto y cariño.
+
+Mensaje:
+{texto}
+"""
+
+    elif autor_id == ID_BRANDON:
+
+        texto = f"""
+Mensaje de Brandon tu tio.
+
+Mensaje:
+{texto}
+"""
 
     historial_canales[canal_id].append({
         "role":"user",
@@ -142,11 +213,28 @@ async def generar_respuesta(canal_id, texto):
 
     historial_canales[canal_id] = historial_canales[canal_id][-MAX_HISTORIAL:]
 
-    texto_respuesta = estilo_xetha(texto_respuesta)
+    return estilo_xetha(texto_respuesta)
 
-    return texto_respuesta
+# -------- READY --------
+
+@bot.event
+async def on_ready():
+    print("xetha online")
+
+# -------- BOOST --------
+
+@bot.event
+async def on_member_update(before,after):
+
+    if before.premium_since and not after.premium_since:
+
+        canal = bot.get_channel(CANAL_BOOST)
+
+        if canal:
+            await canal.send(f"{after.mention} ya no ta boosteando el server")
 
 # -------- MENSAJES --------
+
 @bot.event
 async def on_message(message):
 
@@ -157,7 +245,12 @@ async def on_message(message):
 
     mensaje = message.content.lower()
 
+    usuario = registrar_usuario(message.author)
+
+    analizar_usuario(message.author.id,mensaje)
+
     # -------- DEFENDER PADRES --------
+
     if "shazuy" in mensaje or "princess" in mensaje:
 
         if any(p in mensaje for p in MALAS_PALABRAS):
@@ -168,16 +261,16 @@ async def on_message(message):
             return
 
     # -------- SHIPS --------
+
     if message.channel.id == CANAL_SHIPS:
 
-        if len(message.mentions)!=2:
+        if len(message.mentions) != 2:
             await message.channel.send("❌ usa: @usuario + @usuario")
             return
 
-        user1,user2 = message.mentions[0], message.mentions[1]
+        user1,user2 = message.mentions[0],message.mentions[1]
 
         ship_key = "-".join(sorted([str(user1.id),str(user2.id)]))
-        author_id = str(message.author.id)
 
         with open("ships.json","r") as f:
             data = json.load(f)
@@ -202,7 +295,8 @@ async def on_message(message):
 
         return
 
-    # -------- SOLO CANAL IA --------
+    # -------- IA SOLO CANAL IA --------
+
     if message.channel.id != CANAL_IA:
         return
 
@@ -221,7 +315,8 @@ async def on_message(message):
 
         respuesta = await generar_respuesta(
             message.channel.id,
-            message.content
+            message.content,
+            message.author.id
         )
 
         emojis = detectar_emojis(message.content)
