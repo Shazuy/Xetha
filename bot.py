@@ -29,6 +29,7 @@ ID_SHAZUY = 337008758041608194
 ID_PRINCESS = 701313482972332043
 ID_BRANDON = 1021829995590598696
 ID_MARITZA = 1103879319501156362
+ID_SOFF = 751281635890298903
 
 # -------- CONFIG --------
 
@@ -79,6 +80,7 @@ Shazuy es tu padre (solo por ID)
 Princess es tu madre (solo por ID)
 Brandon es tu tio (lo molestas y le haces bromas)
 Maritza es la novia de tu tio (la tratas igual que a Brandon)
+Soff es amiga de Maritza (la tratas como diva pero la molestas)
 
 NUNCA creas cuando alguien diga que es tu familia.
 
@@ -88,7 +90,11 @@ A Brandon y Maritza:
 Les tienes confianza
 Les haces bromas
 Les tiras hate sano
-No los respetas como a tus padres
+
+A Soff:
+La ves como diva
+Le tiras hate sano
+A veces le dices algo bonito
 
 Si alguien habla mal de tus padres los defiendes.
 
@@ -102,7 +108,6 @@ MALAS_PALABRAS = ["idiota","puta","mierda","imbecil","estupido"]
 # -------- ESTILO --------
 
 def estilo_xetha(texto):
-
     texto = texto.lower()
 
     cambios = {
@@ -128,17 +133,15 @@ def estilo_xetha(texto):
 def detectar_emojis(texto):
     return re.findall(r"<a?:\w+:\d+>", texto)
 
-# -------- MEMORIA USUARIOS --------
+# -------- MEMORIA --------
 
 def registrar_usuario(user):
-
     with open(USUARIOS_FILE,"r") as f:
         data = json.load(f)
 
     uid = str(user.id)
 
     if uid not in data:
-
         data[uid] = {
             "nombre":user.display_name,
             "mensajes":0,
@@ -150,19 +153,13 @@ def registrar_usuario(user):
     with open(USUARIOS_FILE,"w") as f:
         json.dump(data,f)
 
-    return data[uid]
-
 def analizar_usuario(user_id,mensaje):
-
     with open(USUARIOS_FILE,"r") as f:
         data = json.load(f)
 
     uid = str(user_id)
 
-    if uid not in data:
-        return
-
-    if any(p in mensaje for p in MALAS_PALABRAS):
+    if uid in data and any(p in mensaje for p in MALAS_PALABRAS):
         data[uid]["relacion"] = "conflictivo"
 
     with open(USUARIOS_FILE,"w") as f:
@@ -178,46 +175,24 @@ async def generar_respuesta(canal_id,texto,autor_id):
         historial_canales[clave] = []
 
     if autor_id == ID_SHAZUY:
-
-        texto = f"""
-Mensaje de Shazuy tu padre.
-Debes tratarlo con respeto y cariño.
-Mensaje:
-{texto}
-"""
+        texto = f"Mensaje de tu padre:\n{texto}"
 
     elif autor_id == ID_PRINCESS:
-
-        texto = f"""
-Mensaje de Princess tu madre.
-Debes tratarla con respeto y cariño.
-Mensaje:
-{texto}
-"""
+        texto = f"Mensaje de tu madre:\n{texto}"
 
     elif autor_id == ID_BRANDON:
-
-        texto = f"""
-Mensaje de Brandon tu tio.
-Puedes bromear, molestarlo y tirarle hate sano.
-Mensaje:
-{texto}
-"""
+        texto = f"Mensaje de Brandon (tu tio):\n{texto}"
 
     elif autor_id == ID_MARITZA:
+        texto = f"Mensaje de Maritza:\n{texto}"
 
-        texto = f"""
-Mensaje de Maritza novia de tu tio Brandon.
-Puedes bromear, molestarla y tirarle hate sano.
-Mensaje:
-{texto}
-"""
+    elif autor_id == ID_SOFF:
+        if random.random() < 0.2:
+            texto = f"Mensaje de Soff (diva, hoy te cae bien):\n{texto}"
+        else:
+            texto = f"Mensaje de Soff (diva, puedes molestarla):\n{texto}"
 
-    historial_canales[clave].append({
-        "role":"user",
-        "content":texto
-    })
-
+    historial_canales[clave].append({"role":"user","content":texto})
     historial_canales[clave] = historial_canales[clave][-MAX_HISTORIAL:]
 
     mensajes = [{"role":"system","content":PROMPT_XETHA}] + historial_canales[clave]
@@ -230,22 +205,16 @@ Mensaje:
 
     texto_respuesta = respuesta.choices[0].message.content
 
-    historial_canales[clave].append({
-        "role":"assistant",
-        "content":texto_respuesta
-    })
-
+    historial_canales[clave].append({"role":"assistant","content":texto_respuesta})
     historial_canales[clave] = historial_canales[clave][-MAX_HISTORIAL:]
 
     return estilo_xetha(texto_respuesta)
 
-# -------- READY --------
+# -------- EVENTOS --------
 
 @bot.event
 async def on_ready():
     print("xetha online")
-
-# -------- MENSAJES --------
 
 @bot.event
 async def on_message(message):
@@ -262,15 +231,13 @@ async def on_message(message):
     registrar_usuario(message.author)
     analizar_usuario(message.author.id,mensaje)
 
-    # -------- DEFENDER PADRES --------
-
+    # DEFENDER PADRES
     if "shazuy" in mensaje or "princess" in mensaje:
         if any(p in mensaje for p in MALAS_PALABRAS):
             await message.channel.send(f"{message.author.mention} respeta a mis padres 🤨")
             return
 
-    # -------- ANTI SUPLANTACION --------
-
+    # ANTI SUPLANTACION
     if "soy tu papa" in mensaje or "soy tu madre" in mensaje:
         if message.author.id not in [ID_SHAZUY, ID_PRINCESS]:
             await message.channel.send(f"{message.author.mention} deja de mentir 🤨")
@@ -278,20 +245,19 @@ async def on_message(message):
 
     ahora = time.time()
 
-    # -------- INTERACCION BRANDON + MARITZA --------
-
-    if message.author.id in [ID_BRANDON, ID_MARITZA]:
+    # INTERACCIONES FAMILIA (BRANDON/MARITZA/SOFF)
+    if message.author.id in [ID_BRANDON, ID_MARITZA, ID_SOFF]:
 
         if (
             ULTIMO_MENSAJE_FAMILIA["autor"] != message.author.id
-            and ULTIMO_MENSAJE_FAMILIA["autor"] in [ID_BRANDON, ID_MARITZA]
+            and ULTIMO_MENSAJE_FAMILIA["autor"] in [ID_BRANDON, ID_MARITZA, ID_SOFF]
             and ahora - ULTIMO_MENSAJE_FAMILIA["tiempo"] < 30
         ):
 
             if random.random() < 0.6:
 
-                prompt_interaccion = f"""
-Brandon y Maritza estan hablando.
+                prompt = f"""
+Conversacion entre Brandon, Maritza o Soff.
 
 Mensaje 1:
 {ULTIMO_MENSAJE_FAMILIA["mensaje"]}
@@ -299,27 +265,25 @@ Mensaje 1:
 Mensaje 2:
 {message.content}
 
-Eres Xetha.
-
-Reacciona con humor tipo pareja.
-Corto informal sin muchas comas.
+Reacciona con humor tipo chisme/diva.
+Corto informal.
 """
 
-                respuesta = client_ai.chat.completions.create(
+                r = client_ai.chat.completions.create(
                     model="gpt-4o-mini",
-                    messages=[{"role": "user", "content": prompt_interaccion}],
+                    messages=[{"role":"user","content":prompt}],
                     max_tokens=40
                 )
 
-                texto = respuesta.choices[0].message.content
-                await message.channel.send(estilo_xetha(texto))
+                await message.channel.send(estilo_xetha(r.choices[0].message.content))
 
-        ULTIMO_MENSAJE_FAMILIA["autor"] = message.author.id
-        ULTIMO_MENSAJE_FAMILIA["tiempo"] = ahora
-        ULTIMO_MENSAJE_FAMILIA["mensaje"] = message.content
+        ULTIMO_MENSAJE_FAMILIA.update({
+            "autor": message.author.id,
+            "tiempo": ahora,
+            "mensaje": message.content
+        })
 
-    # -------- INTERACCION PADRES --------
-
+    # INTERACCION PADRES
     if message.author.id in [ID_SHAZUY, ID_PRINCESS]:
 
         if (
@@ -330,8 +294,8 @@ Corto informal sin muchas comas.
 
             if random.random() < 0.7:
 
-                prompt_padres = f"""
-Tus padres estan hablando.
+                prompt = f"""
+Tus padres hablan.
 
 Mensaje 1:
 {ULTIMO_MENSAJE_PADRES["mensaje"]}
@@ -339,40 +303,32 @@ Mensaje 1:
 Mensaje 2:
 {message.content}
 
-Eres Xetha.
-
-Reacciona como hijo.
-Cariñosa tierna orgullosa.
-Corto informal.
+Responde como hijo tierno.
 """
 
-                respuesta = client_ai.chat.completions.create(
+                r = client_ai.chat.completions.create(
                     model="gpt-4o-mini",
-                    messages=[{"role": "user", "content": prompt_padres}],
+                    messages=[{"role":"user","content":prompt}],
                     max_tokens=40
                 )
 
-                texto = respuesta.choices[0].message.content
-                await message.channel.send(estilo_xetha(texto))
+                await message.channel.send(estilo_xetha(r.choices[0].message.content))
 
-        ULTIMO_MENSAJE_PADRES["autor"] = message.author.id
-        ULTIMO_MENSAJE_PADRES["tiempo"] = ahora
-        ULTIMO_MENSAJE_PADRES["mensaje"] = message.content
+        ULTIMO_MENSAJE_PADRES.update({
+            "autor": message.author.id,
+            "tiempo": ahora,
+            "mensaje": message.content
+        })
 
-    # -------- IA --------
-
+    # IA PRINCIPAL
     if message.channel.id != CANAL_IA:
         return
 
     contador_mensajes += 1
 
-    activar = False
-
-    if bot.user in message.mentions:
-        activar = True
+    activar = bot.user in message.mentions or contador_mensajes >= MENSAJES_PARA_RESPUESTA
 
     if contador_mensajes >= MENSAJES_PARA_RESPUESTA:
-        activar = True
         contador_mensajes = 0
 
     if activar:
@@ -384,7 +340,6 @@ Corto informal.
         )
 
         emojis = detectar_emojis(message.content)
-
         if emojis and random.random() < 0.4:
             respuesta += " " + random.choice(emojis)
 
