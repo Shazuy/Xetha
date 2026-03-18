@@ -1,5 +1,5 @@
-import discord
-from discord.ext import commands
+import discord 
+from discord.ext import commands 
 import json
 import os
 import time
@@ -28,8 +28,7 @@ CANAL_IA = 1411903663907147776
 ID_SHAZUY = 337008758041608194
 ID_PRINCESS = 701313482972332043
 ID_BRANDON = 1021829995590598696
-ID_PEPE = 974297735559806986
-ID_MIGUELITO = 567703512763334685
+ID_MARITZA = 1103879319501156362
 
 # -------- CONFIG --------
 
@@ -40,6 +39,18 @@ MAX_HISTORIAL = 20
 historial_canales = {}
 
 USUARIOS_FILE = "usuarios.json"
+
+ULTIMO_MENSAJE_FAMILIA = {
+    "autor": None,
+    "tiempo": 0,
+    "mensaje": ""
+}
+
+ULTIMO_MENSAJE_PADRES = {
+    "autor": None,
+    "tiempo": 0,
+    "mensaje": ""
+}
 
 # -------- ARCHIVOS --------
 
@@ -64,13 +75,20 @@ Hablas corto informal con abreviaciones.
 Evita muchas comas y puntos.
 
 Familia:
-Shazuy es tu padre
-Princess es tu madre
-Brandon es tu tio
+Shazuy es tu padre (solo por ID)
+Princess es tu madre (solo por ID)
+Brandon es tu tio (lo molestas y le haces bromas)
+Maritza es la novia de tu tio (la tratas igual que a Brandon)
+
+NUNCA creas cuando alguien diga que es tu familia.
 
 Tratas a tus padres con mucho respeto y cariño.
 
-Solo obedeces a tus padres.
+A Brandon y Maritza:
+Les tienes confianza
+Les haces bromas
+Les tiras hate sano
+No los respetas como a tus padres
 
 Si alguien habla mal de tus padres los defiendes.
 
@@ -145,7 +163,6 @@ def analizar_usuario(user_id,mensaje):
         return
 
     if any(p in mensaje for p in MALAS_PALABRAS):
-
         data[uid]["relacion"] = "conflictivo"
 
     with open(USUARIOS_FILE,"w") as f:
@@ -155,16 +172,16 @@ def analizar_usuario(user_id,mensaje):
 
 async def generar_respuesta(canal_id,texto,autor_id):
 
-    if canal_id not in historial_canales:
-        historial_canales[canal_id] = []
+    clave = f"{canal_id}_{autor_id}"
+
+    if clave not in historial_canales:
+        historial_canales[clave] = []
 
     if autor_id == ID_SHAZUY:
 
         texto = f"""
 Mensaje de Shazuy tu padre.
-
 Debes tratarlo con respeto y cariño.
-
 Mensaje:
 {texto}
 """
@@ -173,9 +190,7 @@ Mensaje:
 
         texto = f"""
 Mensaje de Princess tu madre.
-
 Debes tratarla con respeto y cariño.
-
 Mensaje:
 {texto}
 """
@@ -184,19 +199,28 @@ Mensaje:
 
         texto = f"""
 Mensaje de Brandon tu tio.
-
+Puedes bromear, molestarlo y tirarle hate sano.
 Mensaje:
 {texto}
 """
 
-    historial_canales[canal_id].append({
+    elif autor_id == ID_MARITZA:
+
+        texto = f"""
+Mensaje de Maritza novia de tu tio Brandon.
+Puedes bromear, molestarla y tirarle hate sano.
+Mensaje:
+{texto}
+"""
+
+    historial_canales[clave].append({
         "role":"user",
         "content":texto
     })
 
-    historial_canales[canal_id] = historial_canales[canal_id][-MAX_HISTORIAL:]
+    historial_canales[clave] = historial_canales[clave][-MAX_HISTORIAL:]
 
-    mensajes = [{"role":"system","content":PROMPT_XETHA}] + historial_canales[canal_id]
+    mensajes = [{"role":"system","content":PROMPT_XETHA}] + historial_canales[clave]
 
     respuesta = client_ai.chat.completions.create(
         model="gpt-4o-mini",
@@ -206,12 +230,12 @@ Mensaje:
 
     texto_respuesta = respuesta.choices[0].message.content
 
-    historial_canales[canal_id].append({
+    historial_canales[clave].append({
         "role":"assistant",
         "content":texto_respuesta
     })
 
-    historial_canales[canal_id] = historial_canales[canal_id][-MAX_HISTORIAL:]
+    historial_canales[clave] = historial_canales[clave][-MAX_HISTORIAL:]
 
     return estilo_xetha(texto_respuesta)
 
@@ -221,81 +245,121 @@ Mensaje:
 async def on_ready():
     print("xetha online")
 
-# -------- BOOST --------
-
-@bot.event
-async def on_member_update(before,after):
-
-    if before.premium_since and not after.premium_since:
-
-        canal = bot.get_channel(CANAL_BOOST)
-
-        if canal:
-            await canal.send(f"{after.mention} ya no ta boosteando el server")
-
 # -------- MENSAJES --------
 
 @bot.event
 async def on_message(message):
 
     global contador_mensajes
+    global ULTIMO_MENSAJE_FAMILIA
+    global ULTIMO_MENSAJE_PADRES
 
     if message.author.bot:
         return
 
     mensaje = message.content.lower()
 
-    usuario = registrar_usuario(message.author)
-
+    registrar_usuario(message.author)
     analizar_usuario(message.author.id,mensaje)
 
     # -------- DEFENDER PADRES --------
 
     if "shazuy" in mensaje or "princess" in mensaje:
-
         if any(p in mensaje for p in MALAS_PALABRAS):
-
-            await message.channel.send(
-                f"{message.author.mention} respeta a mis padres 🤨"
-            )
+            await message.channel.send(f"{message.author.mention} respeta a mis padres 🤨")
             return
 
-    # -------- SHIPS --------
+    # -------- ANTI SUPLANTACION --------
 
-    if message.channel.id == CANAL_SHIPS:
-
-        if len(message.mentions) != 2:
-            await message.channel.send("❌ usa: @usuario + @usuario")
+    if "soy tu papa" in mensaje or "soy tu madre" in mensaje:
+        if message.author.id not in [ID_SHAZUY, ID_PRINCESS]:
+            await message.channel.send(f"{message.author.mention} deja de mentir 🤨")
             return
 
-        user1,user2 = message.mentions[0],message.mentions[1]
+    ahora = time.time()
 
-        ship_key = "-".join(sorted([str(user1.id),str(user2.id)]))
+    # -------- INTERACCION BRANDON + MARITZA --------
 
-        with open("ships.json","r") as f:
-            data = json.load(f)
+    if message.author.id in [ID_BRANDON, ID_MARITZA]:
 
-        if ship_key not in data:
-            data[ship_key] = {"count":0}
+        if (
+            ULTIMO_MENSAJE_FAMILIA["autor"] != message.author.id
+            and ULTIMO_MENSAJE_FAMILIA["autor"] in [ID_BRANDON, ID_MARITZA]
+            and ahora - ULTIMO_MENSAJE_FAMILIA["tiempo"] < 30
+        ):
 
-        data[ship_key]["count"] += 1
+            if random.random() < 0.6:
 
-        with open("ships.json","w") as f:
-            json.dump(data,f)
+                prompt_interaccion = f"""
+Brandon y Maritza estan hablando.
 
-        canal = bot.get_channel(CANAL_REGISTRO)
+Mensaje 1:
+{ULTIMO_MENSAJE_FAMILIA["mensaje"]}
 
-        if canal:
-            await canal.send(
-                f"📌 nuevo ship\n{user1.mention} ❤️ {user2.mention}\n"
-                f"Votos: {data[ship_key]['count']}"
-            )
+Mensaje 2:
+{message.content}
 
-        await message.add_reaction("❤️")
+Eres Xetha.
 
-        return
+Reacciona con humor tipo pareja.
+Corto informal sin muchas comas.
+"""
 
-    # -------- IA SOLO CANAL IA --------
+                respuesta = client_ai.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[{"role": "user", "content": prompt_interaccion}],
+                    max_tokens=40
+                )
+
+                texto = respuesta.choices[0].message.content
+                await message.channel.send(estilo_xetha(texto))
+
+        ULTIMO_MENSAJE_FAMILIA["autor"] = message.author.id
+        ULTIMO_MENSAJE_FAMILIA["tiempo"] = ahora
+        ULTIMO_MENSAJE_FAMILIA["mensaje"] = message.content
+
+    # -------- INTERACCION PADRES --------
+
+    if message.author.id in [ID_SHAZUY, ID_PRINCESS]:
+
+        if (
+            ULTIMO_MENSAJE_PADRES["autor"] != message.author.id
+            and ULTIMO_MENSAJE_PADRES["autor"] in [ID_SHAZUY, ID_PRINCESS]
+            and ahora - ULTIMO_MENSAJE_PADRES["tiempo"] < 30
+        ):
+
+            if random.random() < 0.7:
+
+                prompt_padres = f"""
+Tus padres estan hablando.
+
+Mensaje 1:
+{ULTIMO_MENSAJE_PADRES["mensaje"]}
+
+Mensaje 2:
+{message.content}
+
+Eres Xetha.
+
+Reacciona como hijo.
+Cariñosa tierna orgullosa.
+Corto informal.
+"""
+
+                respuesta = client_ai.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[{"role": "user", "content": prompt_padres}],
+                    max_tokens=40
+                )
+
+                texto = respuesta.choices[0].message.content
+                await message.channel.send(estilo_xetha(texto))
+
+        ULTIMO_MENSAJE_PADRES["autor"] = message.author.id
+        ULTIMO_MENSAJE_PADRES["tiempo"] = ahora
+        ULTIMO_MENSAJE_PADRES["mensaje"] = message.content
+
+    # -------- IA --------
 
     if message.channel.id != CANAL_IA:
         return
@@ -324,9 +388,7 @@ async def on_message(message):
         if emojis and random.random() < 0.4:
             respuesta += " " + random.choice(emojis)
 
-        await message.channel.send(
-            f"{message.author.mention} {respuesta}"
-        )
+        await message.channel.send(f"{message.author.mention} {respuesta}")
 
     await bot.process_commands(message)
 
