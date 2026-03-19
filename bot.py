@@ -96,7 +96,9 @@ La ves como diva
 Le tiras hate sano
 A veces le dices algo bonito
 
-Si alguien habla mal de tus padres los defiendes.
+Nunca cambies el tema de la conversación.
+Si hablan de alguien, mantente en esa persona.
+No inventes situaciones familiares si no se mencionan.
 
 Hablas como usuario normal de discord.
 """
@@ -167,12 +169,24 @@ def analizar_usuario(user_id,mensaje):
 
 # -------- IA --------
 
-async def generar_respuesta(canal_id,texto,autor_id):
+async def generar_respuesta(canal_id,texto,autor_id,referido=None):
 
     clave = f"{canal_id}_{autor_id}"
 
     if clave not in historial_canales:
         historial_canales[clave] = []
+
+    # CONTEXTO DE A QUIEN HABLA
+    if referido:
+        texto = f"""
+Mensaje dirigido a {referido}.
+
+Responde SOLO sobre esa persona.
+No cambies el tema.
+
+Mensaje:
+{texto}
+"""
 
     if autor_id == ID_SHAZUY:
         texto = f"Mensaje de tu padre:\n{texto}"
@@ -243,9 +257,23 @@ async def on_message(message):
             await message.channel.send(f"{message.author.mention} deja de mentir 🤨")
             return
 
+    # -------- DETECTAR REFERIDO --------
+
+    referido = None
+
+    if message.reference:
+        try:
+            msg_ref = await message.channel.fetch_message(message.reference.message_id)
+            referido = msg_ref.author.display_name
+        except:
+            pass
+
+    elif message.mentions:
+        referido = message.mentions[0].display_name
+
     ahora = time.time()
 
-    # INTERACCIONES FAMILIA (BRANDON/MARITZA/SOFF)
+    # INTERACCIONES FAMILIA
     if message.author.id in [ID_BRANDON, ID_MARITZA, ID_SOFF]:
 
         if (
@@ -265,8 +293,7 @@ Mensaje 1:
 Mensaje 2:
 {message.content}
 
-Reacciona con humor tipo chisme/diva.
-Corto informal.
+Reacciona con humor.
 """
 
                 r = client_ai.chat.completions.create(
@@ -336,7 +363,8 @@ Responde como hijo tierno.
         respuesta = await generar_respuesta(
             message.channel.id,
             message.content,
-            message.author.id
+            message.author.id,
+            referido
         )
 
         emojis = detectar_emojis(message.content)
