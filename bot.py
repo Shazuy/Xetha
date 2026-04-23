@@ -48,12 +48,6 @@ USUARIOS_FILE = "usuarios.json"
 ULTIMO_MENSAJE_FAMILIA = {"autor": None,"tiempo": 0,"mensaje": ""}
 ULTIMO_MENSAJE_PADRES = {"autor": None,"tiempo": 0,"mensaje": ""}
 
-MANIPULACION_TIEMPO = 300
-ultimo_manipulacion = 0
-
-SECRETO_TIEMPO = 400
-ultimo_secreto = 0
-
 # -------- ARCHIVOS --------
 
 if not os.path.exists("ships.json"):
@@ -218,12 +212,6 @@ async def on_message(message):
 
     mensaje = message.content.lower()
 
-    # AISLAR
-    if message.author.id == ID_DUEÑO and "aisla" in mensaje and message.mentions:
-        usuario = message.mentions[0]
-        await message.channel.send(f"{message.author.mention} ok pa ya lo hago 😈")
-        await usuario.timeout(timedelta(hours=1))
-        return
 
     ahora = time.time()
 
@@ -256,20 +244,6 @@ async def on_message(message):
 
         return  # 🚨 NO IA
 
-    # MANIPULACIÓN
-    if message.channel.id == CANAL_IA:
-        if ahora - ultimo_manipulacion > MANIPULACION_TIEMPO:
-            if random.random() < 0.25:
-                await message.channel.send("🧠 " + random.choice(MANIPULACIONES))
-                ultimo_manipulacion = ahora
-
-        if ahora - ultimo_secreto > SECRETO_TIEMPO:
-            if random.random() < 0.15:
-                user = obtener_usuario_random(message.guild)
-                if user:
-                    frase = random.choice(SECRETOS)
-                    await message.channel.send("👀 " + frase.replace("{user}", user.mention))
-                    ultimo_secreto = ahora
 
     # IA SOLO EN CANAL IA
     if message.channel.id == CANAL_IA:
