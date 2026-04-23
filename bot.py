@@ -90,25 +90,13 @@ PROMPT_XETHA = """
 Te llamas Xetha.
 No eres un bot.
 Eres una persona del servidor.
-Hablas corto informal con abreviaciones.
-Evita muchas comas y puntos.
-
-Familia:
-Shazuy es tu padre
-Princess es tu madre
-Brandon es tu tio
-Maritza es la novia de tu tio
-Soff es diva
-
-No cambies el tema.
+Hablas corto informal.
 """
 
 # -------- FUNCIONES --------
 
 def estilo_xetha(texto):
-    texto = texto.lower()
-    texto = texto.replace(",", "").replace(".", "")
-    return texto
+    return texto.lower().replace(",", "").replace(".", "")
 
 def detectar_emojis(texto):
     return re.findall(r"<a?:\w+:\d+>", texto)
@@ -117,7 +105,7 @@ def obtener_usuario_random(guild):
     miembros = [m for m in guild.members if not m.bot]
     return random.choice(miembros) if miembros else None
 
-def votar_ship(user1, user2):
+def votar_ship(user1, user2, autor):
 
     key = "_".join(sorted([str(user1.id), str(user2.id)]))
 
@@ -131,13 +119,23 @@ def votar_ship(user1, user2):
         }
 
     data[key]["votos"] += 1
+    votos = data[key]["votos"]
 
     with open("ships.json", "w") as f:
         json.dump(data, f, indent=4)
 
+    # LOG
+    canal_logs = bot.get_channel(CANAL_REGISTRO)
+    if canal_logs:
+        asyncio.create_task(
+            canal_logs.send(
+                f"💘 {autor.display_name} votó por {user1.display_name} ❤️ {user2.display_name} ({votos} votos)"
+            )
+        )
+
 # -------- IA --------
 
-async def generar_respuesta(canal_id,texto,autor_id,referido=None):
+async def generar_respuesta(canal_id,texto,autor_id):
 
     clave = f"{canal_id}_{autor_id}"
 
@@ -156,7 +154,6 @@ async def generar_respuesta(canal_id,texto,autor_id,referido=None):
     )
 
     texto_respuesta = respuesta.choices[0].message.content
-
     historial_canales[clave].append({"role":"assistant","content":texto_respuesta})
 
     return estilo_xetha(texto_respuesta)
@@ -179,10 +176,9 @@ async def ranks(ctx):
 
     texto = "💘 top ships del server:\n\n"
 
-    for i, (key, info) in enumerate(ranking[:10], start=1):
+    for i, (_, info) in enumerate(ranking[:10], start=1):
         u1, u2 = info["usuarios"]
         votos = info["votos"]
-
         texto += f"{i}. {u1} ❤️ {u2} — {votos} votos\n"
 
     await ctx.send(texto)
@@ -193,15 +189,12 @@ async def ranks(ctx):
 async def on_ready():
     print("xetha online")
 
-# BIENVENIDA
 @bot.event
 async def on_member_join(member):
     canal = bot.get_channel(CANAL_IA)
     if canal:
-        frase = random.choice(BIENVENIDAS)
-        await canal.send(frase.replace("{user}", member.mention))
+        await canal.send(random.choice(BIENVENIDAS).replace("{user}", member.mention))
 
-# BOOST
 @bot.event
 async def on_member_update(before, after):
     canal = bot.get_channel(CANAL_BOOST)
@@ -210,7 +203,6 @@ async def on_member_update(before, after):
 
     if not before.premium_since and after.premium_since:
         await canal.send(f"💜 {after.mention} empezó a boostear")
-
     elif before.premium_since and not after.premium_since:
         await canal.send(f"😢 {after.mention} dejó de boostear")
 
@@ -235,15 +227,42 @@ async def on_message(message):
 
     ahora = time.time()
 
+    # SHIPS (sin IA)
+    if message.channel.id == CANAL_SHIPS:
+
+        if len(message.mentions) >= 2:
+            u1, u2 = message.mentions[:2]
+
+            if not u1.bot and not u2.bot and u1 != u2:
+                votar_ship(u1, u2, message.author)
+                try:
+                    await message.add_reaction("❤️")
+                except:
+                    pass
+
+        elif " x " in mensaje:
+            partes = mensaje.split(" x ")
+            if len(partes) == 2:
+                miembros = message.guild.members
+                user1 = discord.utils.find(lambda m: m.name.lower() == partes[0].strip(), miembros)
+                user2 = discord.utils.find(lambda m: m.name.lower() == partes[1].strip(), miembros)
+
+                if user1 and user2 and user1 != user2:
+                    votar_ship(user1, user2, message.author)
+                    try:
+                        await message.add_reaction("❤️")
+                    except:
+                        pass
+
+        return  # 🚨 NO IA
+
     # MANIPULACIÓN
-    if message.channel.id in [CANAL_IA, CANAL_SHIPS]:
+    if message.channel.id == CANAL_IA:
         if ahora - ultimo_manipulacion > MANIPULACION_TIEMPO:
             if random.random() < 0.25:
                 await message.channel.send("🧠 " + random.choice(MANIPULACIONES))
                 ultimo_manipulacion = ahora
 
-    # SECRETOS
-    if message.channel.id in [CANAL_IA, CANAL_SHIPS]:
         if ahora - ultimo_secreto > SECRETO_TIEMPO:
             if random.random() < 0.15:
                 user = obtener_usuario_random(message.guild)
@@ -252,49 +271,19 @@ async def on_message(message):
                     await message.channel.send("👀 " + frase.replace("{user}", user.mention))
                     ultimo_secreto = ahora
 
-    # VOTOS DE SHIPS
-    if message.channel.id == CANAL_SHIPS:
-
-        if len(message.mentions) >= 2:
-            u1 = message.mentions[0]
-            u2 = message.mentions[1]
-
-            if not u1.bot and not u2.bot and u1 != u2:
-                votar_ship(u1, u2)
-
-        elif " x " in mensaje:
-            partes = mensaje.split(" x ")
-
-            if len(partes) == 2:
-                nombre1 = partes[0].strip()
-                nombre2 = partes[1].strip()
-
-                miembros = message.guild.members
-
-                user1 = discord.utils.find(lambda m: m.name.lower() == nombre1, miembros)
-                user2 = discord.utils.find(lambda m: m.name.lower() == nombre2, miembros)
-
-                if user1 and user2 and user1 != user2:
-                    votar_ship(user1, user2)
-
-    # IA
-    if message.channel.id in [CANAL_IA, CANAL_SHIPS]:
-
-        activar = True if message.channel.id == CANAL_SHIPS else (
-            bot.user in message.mentions or contador_mensajes >= MENSAJES_PARA_RESPUESTA
-        )
+    # IA SOLO EN CANAL IA
+    if message.channel.id == CANAL_IA:
 
         contador_mensajes += 1
         if contador_mensajes >= MENSAJES_PARA_RESPUESTA:
             contador_mensajes = 0
 
-        if activar:
+        if bot.user in message.mentions or contador_mensajes == 0:
             respuesta = await generar_respuesta(
                 message.channel.id,
                 message.content,
                 message.author.id
             )
-
             await message.channel.send(f"{message.author.mention} {respuesta}")
 
     await bot.process_commands(message)
