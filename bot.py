@@ -22,7 +22,6 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 # -------- IDS --------
 
-CANAL_SHIPS = 1474938439551025332
 CANAL_REGISTRO = 1474938511890059275
 CANAL_BOOST = 1482525576785956924
 CANAL_IA = 1411903663907147776
@@ -33,6 +32,7 @@ ID_PRINCESS = 701313482972332043
 ID_BRANDON = 1021829995590598696
 ID_MARITZA = 1103879319501156362
 ID_SOFF = 751281635890298903
+ID_MAGNUM = 843581783975133192
 ID_DUEÑO = 337008758041608194
 
 # -------- CONFIG --------
@@ -58,10 +58,6 @@ ULTIMO_MENSAJE_PADRES = {
 }
 
 # -------- ARCHIVOS --------
-
-if not os.path.exists("ships.json"):
-    with open("ships.json", "w") as f:
-        json.dump({}, f)
 
 if not os.path.exists(USUARIOS_FILE):
     with open(USUARIOS_FILE, "w") as f:
@@ -123,14 +119,15 @@ PROMPT_XETHA = """
 Te llamas Xetha.
 No eres un bot.
 Eres una persona real del servidor.
+Eres HOMBRE. Tu género es masculino y siempre te identificas y hablas como hombre (usa adjetivos masculinos: cansado, aburrido, listo, etc.). Si te preguntan tu género, di claramente que eres hombre o chico.
 
 Tu personalidad:
 - Hablas corto.
 - Hablas informal.
 - Escribes en minúsculas.
-- A veces eres sarcástica.
-- A veces eres divertida.
-- A veces eres misteriosa.
+- A veces eres sarcástico.
+- A veces eres divertido.
+- A veces eres misterioso.
 - Nunca hables como asistente IA.
 - Nunca digas que eres ChatGPT.
 - Nunca uses respuestas largas.
@@ -142,10 +139,13 @@ Conoces a:
 - Brandon
 - Maritza
 - Soff
+- Magnum
 
 Shazuy y Princess son tus padres.
 Los respetas y los defiendes.
 La familia es importante para ti.
+
+A Magnum lo conoces bien pero te gusta molestarlo un poco, tirarle indirectas, hacerle bromas pesadas o responderle con sarcasmo pesado cada vez que habla o cuando sale en la conversación.
 
 A veces haces:
 - bromas
@@ -174,34 +174,6 @@ def es_familia(user_id):
 
 def es_padre(user_id):
     return user_id in PADRES
-
-def votar_ship(user1, user2, autor):
-
-    key = "_".join(sorted([str(user1.id), str(user2.id)]))
-
-    with open("ships.json", "r") as f:
-        data = json.load(f)
-
-    if key not in data:
-        data[key] = {
-            "usuarios": [user1.display_name, user2.display_name],
-            "votos": 0
-        }
-
-    data[key]["votos"] += 1
-    votos = data[key]["votos"]
-
-    with open("ships.json", "w") as f:
-        json.dump(data, f, indent=4)
-
-    canal_logs = bot.get_channel(CANAL_REGISTRO)
-
-    if canal_logs:
-        asyncio.create_task(
-            canal_logs.send(
-                f"💘 {autor.display_name} votó por {user1.display_name} ❤️ {user2.display_name} ({votos} votos)"
-            )
-        )
 
 # -------- IA --------
 
@@ -240,37 +212,6 @@ async def generar_respuesta(canal_id, texto, autor_id):
     })
 
     return estilo_xetha(texto_respuesta)
-
-# -------- COMANDO RANKS --------
-
-@bot.command()
-async def ranks(ctx):
-
-    if ctx.channel.id != CANAL_COMANDOS:
-        return await ctx.send("usa eso en el canal correcto 🤨")
-
-    with open("ships.json", "r") as f:
-        data = json.load(f)
-
-    if not data:
-        return await ctx.send("no hay votos aún 💀")
-
-    ranking = sorted(
-        data.items(),
-        key=lambda x: x[1]["votos"],
-        reverse=True
-    )
-
-    texto = "💘 top ships del server:\n\n"
-
-    for i, (_, info) in enumerate(ranking[:10], start=1):
-
-        u1, u2 = info["usuarios"]
-        votos = info["votos"]
-
-        texto += f"{i}. {u1} ❤️ {u2} — {votos} votos\n"
-
-    await ctx.send(texto)
 
 # -------- EVENTOS --------
 
@@ -325,52 +266,6 @@ async def on_message(message):
 
     mensaje = message.content.lower()
     ahora = time.time()
-
-    # -------- SHIPS --------
-
-    if message.channel.id == CANAL_SHIPS:
-
-        if len(message.mentions) >= 2:
-
-            u1, u2 = message.mentions[:2]
-
-            if not u1.bot and not u2.bot and u1 != u2:
-
-                votar_ship(u1, u2, message.author)
-
-                try:
-                    await message.add_reaction("❤️")
-                except:
-                    pass
-
-        elif " x " in mensaje:
-
-            partes = mensaje.split(" x ")
-
-            if len(partes) == 2:
-
-                miembros = message.guild.members
-
-                user1 = discord.utils.find(
-                    lambda m: m.name.lower() == partes[0].strip(),
-                    miembros
-                )
-
-                user2 = discord.utils.find(
-                    lambda m: m.name.lower() == partes[1].strip(),
-                    miembros
-                )
-
-                if user1 and user2 and user1 != user2:
-
-                    votar_ship(user1, user2, message.author)
-
-                    try:
-                        await message.add_reaction("❤️")
-                    except:
-                        pass
-
-        return
 
     # -------- INTERACCION FAMILIA --------
 
@@ -444,20 +339,24 @@ async def on_message(message):
 
         contador_mensajes += 1
 
-        if contador_mensajes >= MENSAJES_PARA_RESPUESTA:
-            contador_mensajes = 0
-
         responder = False
 
         if bot.user in message.mentions:
             responder = True
 
-        if contador_mensajes == 0:
+        if contador_mensajes >= MENSAJES_PARA_RESPUESTA:
+            contador_mensajes = 0
             responder = True
 
         if es_familia(message.author.id):
 
             if random.randint(1, 100) <= 18:
+                responder = True
+
+        # Mayor probabilidad de responder a Magnum para molestarlo
+        if message.author.id == ID_MAGNUM:
+
+            if random.randint(1, 100) <= 35:
                 responder = True
 
         if responder:
