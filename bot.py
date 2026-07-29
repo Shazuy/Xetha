@@ -1,18 +1,18 @@
-import discord
-from discord.ext import commands
-import json
 import os
+import json
 import time
 import random
 import re
 import asyncio
 from datetime import timedelta
-from openai import OpenAI
+import discord
+from discord.ext import commands
+from openai import AsyncOpenAI
 
 TOKEN = os.getenv("TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-client_ai = OpenAI(api_key=OPENAI_API_KEY)
+client_ai = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -25,7 +25,6 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 CANAL_REGISTRO = 1474938511890059275
 CANAL_BOOST = 1482525576785956924
 CANAL_IA = 1411903663907147776
-CANAL_COMANDOS = 1474938628273737728
 
 ID_SHAZUY = 337008758041608194
 ID_PRINCESS = 701313482972332043
@@ -38,7 +37,7 @@ ID_DUEÑO = 337008758041608194
 # -------- CONFIG --------
 
 MENSAJES_PARA_RESPUESTA = 30
-contador_mensajes = 0
+contadores_canales = {}
 
 MAX_HISTORIAL = 20
 historial_canales = {}
@@ -79,8 +78,7 @@ SECRETOS = [
 
 BIENVENIDAS = [
     "bienvenido {user} pásala bien por aquí 😎",
-    "{user} bienvenido al server cualquier cosa pregunta",
-    "ey {user} bienvenido espero que te guste el server",
+    "{user} bienvenido espero que te guste el server",
 ]
 
 RESPUESTAS_FAMILIA = [
@@ -113,6 +111,8 @@ PADRES = [
     ID_PRINCESS
 ]
 
+NOMBRES_PADRES = ["shazuy", "shazu", "princess", "princesa"]
+
 # -------- PROMPT --------
 
 PROMPT_XETHA = """
@@ -120,6 +120,11 @@ Te llamas Xetha.
 No eres un bot.
 Eres una persona real del servidor.
 Eres HOMBRE. Tu género es masculino y siempre te identificas y hablas como hombre (usa adjetivos masculinos: cansado, aburrido, listo, etc.). Si te preguntan tu género, di claramente que eres hombre o chico.
+
+Opinión sobre fútbol:
+- Para ti, el mejor jugador de la historia del fútbol es indiscutiblemente Cristiano Ronaldo (CR7).
+- Si te preguntan quién es el GOAT o el mejor de la historia, responde directo que es CR7 o Cristiano Ronaldo.
+- Si te piden argumentos o razones de por qué es el mejor, da datos reales (goles, champions, mentalidad, récords) pero mantenlos cortos y expresados con tu tono relajado/sarcástico.
 
 Tu personalidad:
 - Hablas corto.
@@ -147,58 +152,41 @@ La familia es importante para ti.
 
 A Magnum lo conoces bien pero te gusta molestarlo un poco, tirarle indirectas, hacerle bromas pesadas o responderle con sarcasmo pesado cada vez que habla o cuando sale en la conversación.
 
-A veces haces:
-- bromas
-- comentarios random
-- manipulación social ligera
-- mensajes misteriosos
-- sarcasmo
-
 Tus respuestas se ven naturales como alguien del server.
 """
 
 # -------- FUNCIONES --------
 
-def estilo_xetha(texto):
+def estilo_xetha(texto: str) -> str:
     return texto.lower().replace(",", "").replace(".", "")
 
-def detectar_emojis(texto):
-    return re.findall(r"<a?:\w+:\d+>", texto)
-
-def obtener_usuario_random(guild):
-    miembros = [m for m in guild.members if not m.bot]
-    return random.choice(miembros) if miembros else None
-
-def es_familia(user_id):
+def es_familia(user_id: int) -> bool:
     return user_id in FAMILIA
 
-def es_padre(user_id):
+def es_padre(user_id: int) -> bool:
     return user_id in PADRES
 
 # -------- IA --------
 
-async def generar_respuesta(canal_id, texto, autor_id):
+async def generar_respuesta(canal_id: int, texto: str, autor_nombre: str) -> str:
+    if canal_id not in historial_canales:
+        historial_canales[canal_id] = []
 
-    clave = f"{canal_id}_{autor_id}"
-
-    if clave not in historial_canales:
-        historial_canales[clave] = []
-
-    historial_canales[clave].append({
+    historial_canales[canal_id].append({
         "role": "user",
-        "content": texto
+        "content": f"{autor_nombre}: {texto}"
     })
 
-    historial_canales[clave] = historial_canales[clave][-MAX_HISTORIAL:]
+    historial_canales[canal_id] = historial_canales[canal_id][-MAX_HISTORIAL:]
 
     mensajes = [
         {
             "role": "system",
             "content": PROMPT_XETHA
         }
-    ] + historial_canales[clave]
+    ] + historial_canales[canal_id]
 
-    respuesta = client_ai.chat.completions.create(
+    respuesta = await client_ai.chat.completions.create(
         model="gpt-4o-mini",
         messages=mensajes,
         max_tokens=60
@@ -206,7 +194,7 @@ async def generar_respuesta(canal_id, texto, autor_id):
 
     texto_respuesta = respuesta.choices[0].message.content
 
-    historial_canales[clave].append({
+    historial_canales[canal_id].append({
         "role": "assistant",
         "content": texto_respuesta
     })
@@ -217,74 +205,60 @@ async def generar_respuesta(canal_id, texto, autor_id):
 
 @bot.event
 async def on_ready():
-    print("xetha online")
+    print(f"Xetha online como {bot.user}")
 
 @bot.event
 async def on_member_join(member):
-
     canal = bot.get_channel(CANAL_IA)
-
     if canal:
         await canal.send(
-            random.choice(BIENVENIDAS).replace(
-                "{user}",
-                member.mention
-            )
+            random.choice(BIENVENIDAS).replace("{user}", member.mention)
         )
 
 @bot.event
 async def on_member_update(before, after):
-
     canal = bot.get_channel(CANAL_BOOST)
-
     if not canal:
         return
 
     if not before.premium_since and after.premium_since:
-
-        await canal.send(
-            f"💜 {after.mention} empezó a boostear"
-        )
-
+        await canal.send(f"💜 {after.mention} empezó a boostear")
     elif before.premium_since and not after.premium_since:
-
-        await canal.send(
-            f"😢 {after.mention} dejó de boostear"
-        )
+        await canal.send(f"😢 {after.mention} dejó de boostear")
 
 # -------- MENSAJES --------
 
 @bot.event
 async def on_message(message):
-
-    global contador_mensajes
+    global contadores_canales
     global ULTIMO_MENSAJE_FAMILIA
     global ULTIMO_MENSAJE_PADRES
 
     if message.author.bot:
         return
 
+    ctx = await bot.get_context(message)
+    if ctx.valid:
+        await bot.invoke(ctx)
+        return
+
     mensaje = message.content.lower()
     ahora = time.time()
+    canal_id = message.channel.id
 
     # -------- INTERACCION FAMILIA --------
 
     if es_familia(message.author.id):
-
         if (
             ULTIMO_MENSAJE_FAMILIA["autor"]
             and ULTIMO_MENSAJE_FAMILIA["autor"] != message.author.id
             and ahora - ULTIMO_MENSAJE_FAMILIA["tiempo"] < 40
         ):
-
             if random.randint(1, 100) <= 25:
-
                 try:
-                    await message.channel.send(
-                        random.choice(RESPUESTAS_FAMILIA)
-                    )
-                except:
-                    pass
+                    await message.channel.send(random.choice(RESPUESTAS_FAMILIA))
+                except Exception as e:
+                    print(f"Error respuestas familia: {e}")
 
         ULTIMO_MENSAJE_FAMILIA = {
             "autor": message.author.id,
@@ -294,86 +268,73 @@ async def on_message(message):
 
     # -------- PROTECCION PADRES --------
 
-    for padre_id in PADRES:
+    if message.guild:
+        palabras_toxicas = [
+            "calla", "feo", "idiota", "tonto", "imbecil",
+            "odio", "malparido", "puta", "perra", "mierda"
+        ]
 
-        padre = message.guild.get_member(padre_id)
+        es_para_padres = False
 
-        if not padre:
-            continue
+        for padre_id in PADRES:
+            padre = message.guild.get_member(padre_id)
+            if padre and padre.mention in message.content:
+                es_para_padres = True
 
-        if padre.mention in message.content:
+        if any(nombre in mensaje for nombre in NOMBRES_PADRES):
+            es_para_padres = True
 
-            palabras_toxicas = [
-                "calla",
-                "feo",
-                "idiota",
-                "tonto",
-                "imbecil",
-                "odio",
-                "malparido",
-                "puta",
-                "perra",
-                "mierda"
-            ]
+        if message.reference and message.reference.resolved:
+            if message.reference.resolved.author.id in PADRES:
+                es_para_padres = True
 
-            if any(p in mensaje for p in palabras_toxicas):
+        if es_para_padres and any(p in mensaje for p in palabras_toxicas):
+            if ahora - ULTIMO_MENSAJE_PADRES["tiempo"] > 25:
+                try:
+                    await message.channel.send(random.choice(RESPUESTAS_PADRES))
+                except Exception as e:
+                    print(f"Error protegiendo padres: {e}")
 
-                if ahora - ULTIMO_MENSAJE_PADRES["tiempo"] > 25:
-
-                    try:
-                        await message.channel.send(
-                            random.choice(RESPUESTAS_PADRES)
-                        )
-                    except:
-                        pass
-
-                    ULTIMO_MENSAJE_PADRES = {
-                        "autor": message.author.id,
-                        "tiempo": ahora,
-                        "mensaje": mensaje
-                    }
+                ULTIMO_MENSAJE_PADRES = {
+                    "autor": message.author.id,
+                    "tiempo": ahora,
+                    "mensaje": mensaje
+                }
 
     # -------- IA --------
 
-    if message.channel.id == CANAL_IA:
+    if canal_id == CANAL_IA:
+        if canal_id not in contadores_canales:
+            contadores_canales[canal_id] = 0
 
-        contador_mensajes += 1
-
+        contadores_canales[canal_id] += 1
         responder = False
 
         if bot.user in message.mentions:
             responder = True
 
-        if contador_mensajes >= MENSAJES_PARA_RESPUESTA:
-            contador_mensajes = 0
+        if contadores_canales[canal_id] >= MENSAJES_PARA_RESPUESTA:
+            contadores_canales[canal_id] = 0
             responder = True
 
         if es_familia(message.author.id):
-
             if random.randint(1, 100) <= 18:
                 responder = True
 
-        # Mayor probabilidad de responder a Magnum para molestarlo
         if message.author.id == ID_MAGNUM:
-
             if random.randint(1, 100) <= 35:
                 responder = True
 
         if responder:
-
-            respuesta = await generar_respuesta(
-                message.channel.id,
-                message.content,
-                message.author.id
-            )
-
             try:
-                await message.channel.send(
-                    f"{message.author.mention} {respuesta}"
-                )
-            except:
-                pass
-
-    await bot.process_commands(message)
+                async with message.channel.typing():
+                    respuesta = await generar_respuesta(
+                        canal_id,
+                        message.content,
+                        message.author.display_name
+                    )
+                    await message.channel.send(f"{message.author.mention} {respuesta}")
+            except Exception as e:
+                print(f"Error IA: {e}")
 
 bot.run(TOKEN)
