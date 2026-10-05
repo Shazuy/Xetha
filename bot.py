@@ -1,3 +1,4 @@
+```python
 import os
 import json
 import time
@@ -35,9 +36,6 @@ ID_MAGNUM = 843581783975133192
 ID_DUEÑO = 337008758041608194
 
 # -------- CONFIG --------
-
-MENSAJES_PARA_RESPUESTA = 30
-contadores_canales = {}
 
 MAX_HISTORIAL = 20
 historial_canales = {}
@@ -138,6 +136,19 @@ Tu personalidad:
 - Nunca uses respuestas largas.
 - Actúas como alguien del grupo.
 
+IMPORTANTE SOBRE LAS CONVERSACIONES:
+- Solo respondes cuando claramente te están hablando a ti.
+- Si alguien menciona tu nombre "xetha" dirigiéndose a ti, puedes responder.
+- Si alguien te menciona directamente con @, debes responder.
+- Si alguien responde directamente a uno de tus mensajes, puedes continuar la conversación.
+- Si una persona pregunta algo claramente dirigido a ti aunque no use tu nombre, puedes responder.
+- Si una conversación simplemente menciona la palabra "xetha" pero no te están hablando a ti, no respondas.
+- Si están hablando entre ellos y no te están incluyendo, no intervengas.
+- No respondas simplemente porque alguien hizo una pregunta general.
+- No respondas mensajes al azar.
+- No intentes meterte en todas las conversaciones.
+- Es mejor quedarte callado que responder cuando no estás seguro de que te están hablando.
+
 Conoces a:
 - Shazuy
 - Princess
@@ -160,11 +171,61 @@ Tus respuestas se ven naturales como alguien del server.
 def estilo_xetha(texto: str) -> str:
     return texto.lower().replace(",", "").replace(".", "")
 
+
 def es_familia(user_id: int) -> bool:
     return user_id in FAMILIA
 
+
 def es_padre(user_id: int) -> bool:
     return user_id in PADRES
+
+
+def estan_hablando_con_xetha(message: discord.Message) -> bool:
+    """
+    Determina si el mensaje parece estar dirigido a Xetha.
+    """
+
+    contenido = message.content.lower().strip()
+
+    # Si mencionaron directamente al bot
+    if bot.user and bot.user in message.mentions:
+        return True
+
+    # Si responden directamente a un mensaje de Xetha
+    if message.reference and message.reference.resolved:
+        mensaje_referenciado = message.reference.resolved
+
+        if (
+            hasattr(mensaje_referenciado, "author")
+            and mensaje_referenciado.author.id == bot.user.id
+        ):
+            return True
+
+    # Variaciones del nombre
+    patrones_xetha = [
+        r"\bxetha\b",
+        r"\bxetha[,!?]",
+        r"^xetha$",
+        r"^oye xetha\b",
+        r"^ey xetha\b",
+        r"^hey xetha\b",
+        r"^hola xetha\b",
+        r"^xetha que\b",
+        r"^xetha qué\b",
+        r"^xetha sabes\b",
+        r"^xetha puedes\b",
+        r"^xetha dime\b",
+        r"^xetha mira\b",
+        r"^xetha ven\b",
+        r"^xetha escucha\b",
+    ]
+
+    for patron in patrones_xetha:
+        if re.search(patron, contenido):
+            return True
+
+    return False
+
 
 # -------- IA --------
 
@@ -201,36 +262,47 @@ async def generar_respuesta(canal_id: int, texto: str, autor_nombre: str) -> str
 
     return estilo_xetha(texto_respuesta)
 
+
 # -------- EVENTOS --------
 
 @bot.event
 async def on_ready():
     print(f"Xetha online como {bot.user}")
 
+
 @bot.event
 async def on_member_join(member):
     canal = bot.get_channel(CANAL_IA)
+
     if canal:
         await canal.send(
             random.choice(BIENVENIDAS).replace("{user}", member.mention)
         )
 
+
 @bot.event
 async def on_member_update(before, after):
     canal = bot.get_channel(CANAL_BOOST)
+
     if not canal:
         return
 
     if not before.premium_since and after.premium_since:
-        await canal.send(f"💜 {after.mention} empezó a boostear")
+        await canal.send(
+            f"💜 {after.mention} empezó a boostear"
+        )
+
     elif before.premium_since and not after.premium_since:
-        await canal.send(f"😢 {after.mention} dejó de boostear")
+        await canal.send(
+            f"😢 {after.mention} dejó de boostear"
+        )
+
 
 # -------- MENSAJES --------
 
 @bot.event
 async def on_message(message):
-    global contadores_canales
+
     global ULTIMO_MENSAJE_FAMILIA
     global ULTIMO_MENSAJE_PADRES
 
@@ -238,6 +310,7 @@ async def on_message(message):
         return
 
     ctx = await bot.get_context(message)
+
     if ctx.valid:
         await bot.invoke(ctx)
         return
@@ -249,14 +322,20 @@ async def on_message(message):
     # -------- INTERACCION FAMILIA --------
 
     if es_familia(message.author.id):
+
         if (
             ULTIMO_MENSAJE_FAMILIA["autor"]
             and ULTIMO_MENSAJE_FAMILIA["autor"] != message.author.id
             and ahora - ULTIMO_MENSAJE_FAMILIA["tiempo"] < 40
         ):
+
             if random.randint(1, 100) <= 25:
+
                 try:
-                    await message.channel.send(random.choice(RESPUESTAS_FAMILIA))
+                    await message.channel.send(
+                        random.choice(RESPUESTAS_FAMILIA)
+                    )
+
                 except Exception as e:
                     print(f"Error respuestas familia: {e}")
 
@@ -269,15 +348,26 @@ async def on_message(message):
     # -------- PROTECCION PADRES --------
 
     if message.guild:
+
         palabras_toxicas = [
-            "calla", "feo", "idiota", "tonto", "imbecil",
-            "odio", "malparido", "puta", "perra", "mierda"
+            "calla",
+            "feo",
+            "idiota",
+            "tonto",
+            "imbecil",
+            "odio",
+            "malparido",
+            "puta",
+            "perra",
+            "mierda"
         ]
 
         es_para_padres = False
 
         for padre_id in PADRES:
+
             padre = message.guild.get_member(padre_id)
+
             if padre and padre.mention in message.content:
                 es_para_padres = True
 
@@ -285,13 +375,19 @@ async def on_message(message):
             es_para_padres = True
 
         if message.reference and message.reference.resolved:
+
             if message.reference.resolved.author.id in PADRES:
                 es_para_padres = True
 
         if es_para_padres and any(p in mensaje for p in palabras_toxicas):
+
             if ahora - ULTIMO_MENSAJE_PADRES["tiempo"] > 25:
+
                 try:
-                    await message.channel.send(random.choice(RESPUESTAS_PADRES))
+                    await message.channel.send(
+                        random.choice(RESPUESTAS_PADRES)
+                    )
+
                 except Exception as e:
                     print(f"Error protegiendo padres: {e}")
 
@@ -304,37 +400,28 @@ async def on_message(message):
     # -------- IA --------
 
     if canal_id == CANAL_IA:
-        if canal_id not in contadores_canales:
-            contadores_canales[canal_id] = 0
 
-        contadores_canales[canal_id] += 1
-        responder = False
-
-        if bot.user in message.mentions:
-            responder = True
-
-        if contadores_canales[canal_id] >= MENSAJES_PARA_RESPUESTA:
-            contadores_canales[canal_id] = 0
-            responder = True
-
-        if es_familia(message.author.id):
-            if random.randint(1, 100) <= 18:
-                responder = True
-
-        if message.author.id == ID_MAGNUM:
-            if random.randint(1, 100) <= 35:
-                responder = True
+        responder = estan_hablando_con_xetha(message)
 
         if responder:
+
             try:
+
                 async with message.channel.typing():
+
                     respuesta = await generar_respuesta(
                         canal_id,
                         message.content,
                         message.author.display_name
                     )
-                    await message.channel.send(f"{message.author.mention} {respuesta}")
+
+                    await message.channel.send(
+                        f"{message.author.mention} {respuesta}"
+                    )
+
             except Exception as e:
                 print(f"Error IA: {e}")
 
+
 bot.run(TOKEN)
+```
