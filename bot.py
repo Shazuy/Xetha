@@ -1,4 +1,4 @@
-```python
+python
 import os
 import json
 import time
@@ -424,4 +424,3 @@ async def on_message(message):
 
 
 bot.run(TOKEN)
-```
