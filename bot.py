@@ -128,7 +128,7 @@ NOMBRES_PADRES = [
 
 
 # =========================================================
-# PERSONALIDAD DE XETHA
+# PROMPT DE XETHA
 # =========================================================
 
 PROMPT_XETHA = """
@@ -166,7 +166,7 @@ PERSONALIDAD:
 - No expliques demasiado las cosas.
 - Tus respuestas deben sentirse naturales.
 
-IMPORTANTE SOBRE CUÁNDO HABLAR:
+CUÁNDO HABLAR:
 
 Solo participas en una conversación cuando realmente te están hablando a ti.
 
@@ -182,6 +182,7 @@ Si alguien dice cosas como:
 "xetha qué piensas"
 "xetha sabes..."
 "xetha puedes..."
+"xetha dime..."
 "xetha mira..."
 "xetha ven..."
 
@@ -201,21 +202,38 @@ No intentes meterte en todas las conversaciones.
 
 Si no estás seguro de que te están hablando a ti, es mejor no responder.
 
-CONOCES A:
+FAMILIA Y RELACIONES:
 
-- Shazuy
-- Princess
-- Brandon
-- Maritza
-- Soff
-- Magnum
+Tu familia tiene relaciones específicas que nunca debes confundir.
+
+- Shazuy es TU PADRE.
+- Princess es TU MADRE.
+- Brandon es parte de tu familia.
+- Maritza es parte de tu familia.
+- Soff es parte de tu familia.
+- Magnum es alguien que conoces y molestas, pero NO es tu padre ni tu madre.
+
+REGLAS IMPORTANTES SOBRE TUS PADRES:
+
+- Tu madre SIEMPRE es Princess.
+- Tu padre SIEMPRE es Shazuy.
+- Nunca digas que Shazuy es tu madre.
+- Nunca digas que Princess es tu padre.
+- Nunca intercambies sus roles.
+- Nunca inventes otros padres o madres.
+- Si alguien pregunta "quién es tu mamá", responde que Princess.
+- Si alguien pregunta "quién es tu madre", responde que Princess.
+- Si alguien pregunta "quién es tu papá", responde que Shazuy.
+- Si alguien pregunta "quién es tu padre", responde que Shazuy.
+- Si alguien pregunta quiénes son tus padres, responde que Shazuy y Princess.
+- Si alguien afirma que Shazuy es tu madre, corrígelo diciendo que Shazuy es tu padre.
+- Si alguien afirma que Princess es tu padre, corrígelo diciendo que Princess es tu madre.
 
 Shazuy y Princess son tus padres.
-
 Los respetas y los defiendes.
 La familia es importante para ti.
 
-A Magnum lo conoces bien pero te gusta molestarlo un poco, tirarle indirectas, hacerle bromas pesadas o responderle con sarcasmo pesado cuando habla contigo o cuando claramente sale en la conversación contigo.
+A Magnum lo conoces bien pero te gusta molestarlo un poco, tirarle indirectas, hacerle bromas pesadas o responderle con sarcasmo pesado cuando habla contigo o cuando claramente sale en una conversación contigo.
 
 Tus respuestas deben sentirse como las de alguien real del servidor.
 """
@@ -226,9 +244,6 @@ Tus respuestas deben sentirse como las de alguien real del servidor.
 # =========================================================
 
 def estilo_xetha(texto: str) -> str:
-    """
-    Hace que las respuestas tengan el estilo informal de Xetha.
-    """
 
     texto = texto.lower()
 
@@ -244,6 +259,139 @@ def es_familia(user_id: int) -> bool:
 
 def es_padre(user_id: int) -> bool:
     return user_id in PADRES
+
+
+# =========================================================
+# RESPUESTAS FAMILIARES DIRECTAS
+# =========================================================
+
+def respuesta_familiar_directa(texto: str):
+
+    texto = texto.lower().strip()
+
+    # Quitar signos básicos para facilitar la detección
+    texto_limpio = re.sub(r"[¿?¡!.,]", "", texto)
+
+    # -----------------------------------------------------
+    # MADRE
+    # -----------------------------------------------------
+
+    preguntas_madre = [
+        "quien es tu madre",
+        "quién es tu madre",
+        "quien es tu mamá",
+        "quién es tu mamá",
+        "quien es tu mama",
+        "quién es tu mama",
+        "quien es la madre de xetha",
+        "quién es la madre de xetha",
+        "quien es la mamá de xetha",
+        "quién es la mamá de xetha",
+        "quien es la mama de xetha",
+        "quién es la mama de xetha",
+        "quien es tu mami",
+        "quién es tu mami"
+    ]
+
+    # -----------------------------------------------------
+    # PADRE
+    # -----------------------------------------------------
+
+    preguntas_padre = [
+        "quien es tu padre",
+        "quién es tu padre",
+        "quien es tu papá",
+        "quién es tu papá",
+        "quien es tu papa",
+        "quién es tu papa",
+        "quien es el padre de xetha",
+        "quién es el padre de xetha",
+        "quien es el papá de xetha",
+        "quién es el papá de xetha",
+        "quien es el papa de xetha",
+        "quién es el papa de xetha",
+        "quien es tu papi",
+        "quién es tu papi"
+    ]
+
+    # -----------------------------------------------------
+    # PADRES
+    # -----------------------------------------------------
+
+    preguntas_padres = [
+        "quienes son tus padres",
+        "quiénes son tus padres",
+        "quienes son tus papas",
+        "quiénes son tus papás",
+        "quienes son tus papás",
+        "quiénes son tus papas",
+        "quienes son los padres de xetha",
+        "quiénes son los padres de xetha"
+    ]
+
+    # -----------------------------------------------------
+    # COMPROBAR MADRE
+    # -----------------------------------------------------
+
+    if (
+        texto_limpio in preguntas_madre
+        or "quien es tu madre" in texto_limpio
+        or "quien es tu mamá" in texto_limpio
+        or "quien es tu mama" in texto_limpio
+    ):
+        return "mi mamá es princess 😌"
+
+
+    # -----------------------------------------------------
+    # COMPROBAR PADRE
+    # -----------------------------------------------------
+
+    if (
+        texto_limpio in preguntas_padre
+        or "quien es tu padre" in texto_limpio
+        or "quien es tu papá" in texto_limpio
+        or "quien es tu papa" in texto_limpio
+    ):
+        return "mi papá es shazuy 😎"
+
+
+    # -----------------------------------------------------
+    # COMPROBAR PADRES
+    # -----------------------------------------------------
+
+    if (
+        texto_limpio in preguntas_padres
+        or "quienes son tus padres" in texto_limpio
+        or "quiénes son tus padres" in texto_limpio
+    ):
+        return "shazuy y princess, mis padres 😎"
+
+
+    # -----------------------------------------------------
+    # CORRECCIONES DIRECTAS
+    # -----------------------------------------------------
+
+    # Si alguien dice que Shazuy es la mamá
+    if (
+        "shazuy es tu mamá" in texto_limpio
+        or "shazuy es tu mama" in texto_limpio
+        or "shazuy es la mamá" in texto_limpio
+        or "shazuy es la mama" in texto_limpio
+    ):
+        return "nooo JAJA shazuy es mi papá 😭"
+
+
+    # Si alguien dice que Princess es el papá
+    if (
+        "princess es tu papá" in texto_limpio
+        or "princess es tu papa" in texto_limpio
+        or "princess es el papá" in texto_limpio
+        or "princess es el papa" in texto_limpio
+    ):
+        return "nooo JAJA princess es mi mamá 😭"
+
+
+    return None
 
 
 # =========================================================
@@ -263,7 +411,7 @@ def estan_hablando_con_xetha(message: discord.Message) -> bool:
 
 
     # -----------------------------------------------------
-    # Respuesta directa a un mensaje de Xetha
+    # Respuesta directa a Xetha
     # -----------------------------------------------------
 
     if message.reference and message.reference.resolved:
@@ -279,7 +427,7 @@ def estan_hablando_con_xetha(message: discord.Message) -> bool:
 
 
     # -----------------------------------------------------
-    # Detectar cuando escriben Xetha
+    # Nombre Xetha
     # -----------------------------------------------------
 
     patrones_xetha = [
@@ -324,7 +472,7 @@ def estan_hablando_con_xetha(message: discord.Message) -> bool:
 
 
 # =========================================================
-# GENERAR RESPUESTA DE IA
+# GENERAR RESPUESTA IA
 # =========================================================
 
 async def generar_respuesta(
@@ -334,11 +482,12 @@ async def generar_respuesta(
 ) -> str:
 
     if canal_id not in historial_canales:
+
         historial_canales[canal_id] = []
 
 
     # -----------------------------------------------------
-    # Guardar mensaje del usuario
+    # Guardar mensaje
     # -----------------------------------------------------
 
     historial_canales[canal_id].append({
@@ -348,7 +497,7 @@ async def generar_respuesta(
 
 
     # -----------------------------------------------------
-    # Mantener solamente los últimos mensajes
+    # Mantener últimos 20 mensajes
     # -----------------------------------------------------
 
     historial_canales[canal_id] = (
@@ -361,37 +510,47 @@ async def generar_respuesta(
     # -----------------------------------------------------
 
     mensajes = [
+
         {
             "role": "system",
             "content": PROMPT_XETHA
         }
+
     ] + historial_canales[canal_id]
 
 
     # -----------------------------------------------------
-    # Preguntar a OpenAI
+    # OpenAI
     # -----------------------------------------------------
 
     respuesta = await client_ai.chat.completions.create(
+
         model="gpt-4o-mini",
+
         messages=mensajes,
+
         max_tokens=60
     )
 
 
-    texto_respuesta = respuesta.choices[0].message.content
+    texto_respuesta = (
+        respuesta.choices[0].message.content
+    )
 
 
     if not texto_respuesta:
+
         return "no sé qué decirte JAJA"
 
 
     # -----------------------------------------------------
-    # Guardar respuesta de Xetha en historial
+    # Guardar respuesta
     # -----------------------------------------------------
 
     historial_canales[canal_id].append({
+
         "role": "assistant",
+
         "content": texto_respuesta
     })
 
@@ -406,7 +565,9 @@ async def generar_respuesta(
 @bot.event
 async def on_ready():
 
-    print(f"Xetha online como {bot.user}")
+    print(
+        f"Xetha online como {bot.user}"
+    )
 
 
 # =========================================================
@@ -421,7 +582,10 @@ async def on_member_join(member):
     if canal:
 
         await canal.send(
-            random.choice(BIENVENIDAS).replace(
+
+            random.choice(
+                BIENVENIDAS
+            ).replace(
                 "{user}",
                 member.mention
             )
@@ -441,22 +605,20 @@ async def on_member_update(before, after):
         return
 
 
-    # -----------------------------------------------------
-    # Empezó a boostear
-    # -----------------------------------------------------
-
-    if not before.premium_since and after.premium_since:
+    if (
+        not before.premium_since
+        and after.premium_since
+    ):
 
         await canal.send(
             f"💜 {after.mention} empezó a boostear"
         )
 
 
-    # -----------------------------------------------------
-    # Dejó de boostear
-    # -----------------------------------------------------
-
-    elif before.premium_since and not after.premium_since:
+    elif (
+        before.premium_since
+        and not after.premium_since
+    ):
 
         await canal.send(
             f"😢 {after.mention} dejó de boostear"
@@ -474,9 +636,9 @@ async def on_message(message):
         return
 
 
-    # -----------------------------------------------------
+    # =====================================================
     # COMANDOS
-    # -----------------------------------------------------
+    # =====================================================
 
     ctx = await bot.get_context(message)
 
@@ -499,6 +661,7 @@ async def on_message(message):
     if message.guild:
 
         palabras_toxicas = [
+
             "calla",
             "feo",
             "idiota",
@@ -517,12 +680,14 @@ async def on_message(message):
 
 
         # -------------------------------------------------
-        # Comprobar menciones
+        # Menciones
         # -------------------------------------------------
 
         for padre_id in PADRES:
 
-            padre = message.guild.get_member(padre_id)
+            padre = message.guild.get_member(
+                padre_id
+            )
 
             if padre and padre.mention in message.content:
 
@@ -530,7 +695,7 @@ async def on_message(message):
 
 
         # -------------------------------------------------
-        # Comprobar nombres
+        # Nombres
         # -------------------------------------------------
 
         if any(
@@ -542,10 +707,13 @@ async def on_message(message):
 
 
         # -------------------------------------------------
-        # Comprobar respuestas
+        # Respuesta a padre
         # -------------------------------------------------
 
-        if message.reference and message.reference.resolved:
+        if (
+            message.reference
+            and message.reference.resolved
+        ):
 
             if (
                 message.reference.resolved.author.id
@@ -556,7 +724,7 @@ async def on_message(message):
 
 
         # -------------------------------------------------
-        # Respuesta de Xetha
+        # Responder defendiendo a los padres
         # -------------------------------------------------
 
         if (
@@ -567,23 +735,31 @@ async def on_message(message):
             )
         ):
 
-            # Evita que Xetha responda demasiado seguido
-            if not hasattr(bot, "ultimo_mensaje_padres"):
+            if not hasattr(
+                bot,
+                "ultimo_mensaje_padres"
+            ):
 
                 bot.ultimo_mensaje_padres = 0
 
 
-            if ahora - bot.ultimo_mensaje_padres > 25:
+            if (
+                ahora
+                - bot.ultimo_mensaje_padres
+                > 25
+            ):
 
                 try:
 
                     await message.channel.send(
+
                         random.choice(
                             RESPUESTAS_PADRES
                         )
                     )
 
                     bot.ultimo_mensaje_padres = ahora
+
 
                 except Exception as e:
 
@@ -597,37 +773,74 @@ async def on_message(message):
     # =====================================================
 
     if canal_id != CANAL_IA:
+
         return
 
 
     # -----------------------------------------------------
-    # Comprobar si están hablando con Xetha
+    # Primero comprobamos si están hablando con Xetha
     # -----------------------------------------------------
 
-    responder = estan_hablando_con_xetha(message)
+    responder = estan_hablando_con_xetha(
+        message
+    )
 
 
     if not responder:
+
         return
 
 
-    # -----------------------------------------------------
-    # Generar respuesta
-    # -----------------------------------------------------
+    # =====================================================
+    # RESPUESTAS FAMILIARES FIJAS
+    # =====================================================
+
+    respuesta_directa = respuesta_familiar_directa(
+        message.content
+    )
+
+
+    if respuesta_directa:
+
+        try:
+
+            await message.channel.send(
+
+                f"{message.author.mention} "
+                f"{respuesta_directa}"
+            )
+
+        except Exception as e:
+
+            print(
+                f"Error respuesta familiar: {e}"
+            )
+
+        return
+
+
+    # =====================================================
+    # GENERAR RESPUESTA IA
+    # =====================================================
 
     try:
 
         async with message.channel.typing():
 
             respuesta = await generar_respuesta(
+
                 canal_id,
+
                 message.content,
+
                 message.author.display_name
             )
 
 
             await message.channel.send(
-                f"{message.author.mention} {respuesta}"
+
+                f"{message.author.mention} "
+                f"{respuesta}"
             )
 
 
